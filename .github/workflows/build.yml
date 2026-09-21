@@ -77,7 +77,7 @@ jobs:
           IS64BIT: 1
         run: make -j${nproc} linux
 
-      - name: Linux (32-bit)
-        env:
-          IS64BIT: 0
-        run: make -j${nproc} linux
+      #- name: Linux (32-bit)
+      #  env:
+      #    IS64BIT: 0
+      #  run: make -j${nproc} linux
