@@ -4,8 +4,10 @@
 1. new_game: starts a new game and saves. The save must be valid in the GBA
    format and hold the expected state.
 2. continue_game: continues that save, plays on and saves again.
-3. random_play: continues the first save and presses random buttons.
-4. With --audit, audit_data.py (needs gdb and a build with debug info).
+3. first_battle: continues that save, fights the first battle and saves with
+   the starter in the party.
+4. random_play: continues the last save and presses random buttons.
+5. With --audit, audit_data.py (needs gdb and a build with debug info).
 
 Every run must exit normally after all of its frames.
 
@@ -53,7 +55,7 @@ def main():
     parser.add_argument("--audit", action="store_true", help="also run audit_data.py")
     args = parser.parse_args()
 
-    # Brendan's room is map 1.1 and the house's first floor 1.0
+    # Brendan's room is map 1.1, the house's first floor 1.0 and Birch's lab 1.4
     new_game = run_scenario(args.binary, "new_game", os.path.join(args.out, "new_game"))
     if check_run("new_game", new_game):
         check_save("new_game", new_game.save_path, expect_counter=1, expect_name="AAAAAAA",
@@ -65,9 +67,16 @@ def main():
             check_save("continue_game", continued.save_path, expect_counter=2, expect_name="AAAAAAA",
                        expect_money=3000, expect_map="1.0")
 
-        random_play = run_scenario(args.binary, "random_play", os.path.join(args.out, "random_play"),
-                                   save=new_game.save_path, params={"SEED": 1, "FRAMES": args.random_frames})
-        check_run("random_play", random_play)
+            battle = run_scenario(args.binary, "first_battle", os.path.join(args.out, "first_battle"),
+                                  save=continued.save_path)
+            if check_run("first_battle", battle):
+                check_save("first_battle", battle.save_path, expect_counter=3, expect_name="AAAAAAA",
+                           expect_money=3000, expect_map="1.4", expect_party=1)
+
+                random_play = run_scenario(args.binary, "random_play", os.path.join(args.out, "random_play"),
+                                           save=battle.save_path,
+                                           params={"SEED": 1, "FRAMES": args.random_frames})
+                check_run("random_play", random_play)
 
     if args.audit:
         audit = subprocess.run([sys.executable, os.path.join(TEST_DIR, "audit_data.py"), args.binary])

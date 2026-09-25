@@ -4,8 +4,8 @@
 Runs the same scenarios with both builds and reports the first frame whose
 video or audio differs. Changes that shouldn't affect the game (refactors,
 build changes, platform fixes) should show no differences at all. Scenarios
-after new_game start from the save the BASELINE build made, so loading older
-saves gets tested too.
+after new_game start from the save the BASELINE build made in the previous
+one, so loading older saves gets tested too.
 
 usage: compare.py BASELINE CANDIDATE [--out DIR] [--random-seeds 1,2,3] [--random-frames N]
 """
@@ -33,20 +33,21 @@ def main():
     parser.add_argument("--random-frames", type=int, default=20000)
     args = parser.parse_args()
 
-    runs = [("new_game", "new_game", {}, False), ("continue_game", "continue_game", {}, True)]
+    # (name, scenario, parameters, name of the run whose baseline save to start from)
+    runs = [("new_game", "new_game", {}, None), ("continue_game", "continue_game", {}, "new_game"),
+            ("first_battle", "first_battle", {}, "continue_game")]
     for seed in args.random_seeds.split(","):
-        runs.append((f"random_play_{seed}", "random_play", {"SEED": int(seed), "FRAMES": args.random_frames}, True))
+        runs.append((f"random_play_{seed}", "random_play", {"SEED": int(seed), "FRAMES": args.random_frames},
+                     "first_battle"))
 
     differences = 0
-    baseline_save = None
-    for name, scenario, params, needs_save in runs:
+    baseline_saves = {}
+    for name, scenario, params, save_from in runs:
         results = {}
         for label, binary in (("baseline", args.baseline), ("candidate", args.candidate)):
             out = os.path.join(args.out, label, name)
-            results[label] = run_scenario(binary, scenario, out, save=baseline_save if needs_save else None,
-                                          params=params)
-        if name == "new_game":
-            baseline_save = results["baseline"].save_path
+            results[label] = run_scenario(binary, scenario, out, save=baseline_saves.get(save_from), params=params)
+        baseline_saves[name] = results["baseline"].save_path
 
         a, b = results["baseline"].hashes(), results["candidate"].hashes()
         video, audio = first_difference(a, b, 0), first_difference(a, b, 1)
