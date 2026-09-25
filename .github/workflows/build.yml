@@ -77,7 +77,17 @@ jobs:
       - name: Windows (64-bit)
         env:
           IS64BIT: 1
-        run: make -j${nproc} winwsl
+        run: |
+          make -j${nproc} winwsl
+          cp SDL2/x86_64-w64-mingw32/bin/SDL2.dll .
+
+      - name: Upload Windows (64-bit) build
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows64
+          path: |
+            pokeemerald64.exe
+            SDL2.dll
 
       - name: Windows (32-bit)
         env:
@@ -94,7 +104,7 @@ jobs:
         run: python3 test/headless/smoke.py ./pokeemerald64 --audit --out build/headless
 
       - name: Upload headless test output
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: headless-linux64
@@ -104,3 +114,54 @@ jobs:
       #  env:
       #    IS64BIT: 0
       #  run: make -j${nproc} linux
+
+  windows-test:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Download Windows (64-bit) build
+        uses: actions/download-artifact@v4
+        with:
+          name: windows64
+
+      - name: Headless tests (Windows 64-bit)
+        run: python test/headless/smoke.py pokeemerald64.exe --out build/headless
+
+      - name: Download Linux test output
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: headless-linux64
+          path: build/headless-linux
+
+      # Not required to pass: differences point at platform-dependent behavior worth a look
+      - name: Compare frames with Linux
+        if: always()
+        continue-on-error: true
+        shell: python
+        run: |
+          import os, sys
+          different = 0
+          for name in sorted(os.listdir("build/headless")):
+              linux = os.path.join("build/headless-linux", name, "hashes.txt")
+              windows = os.path.join("build/headless", name, "hashes.txt")
+              if not (os.path.exists(linux) and os.path.exists(windows)):
+                  continue
+              a, b = open(linux).read().splitlines(), open(windows).read().splitlines()
+              first = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), None)
+              if first is None and len(a) == len(b):
+                  print(f"{name}: identical to Linux ({len(a)} frames)")
+              else:
+                  different += 1
+                  print(f"{name}: differs from Linux from frame {first if first is not None else min(len(a), len(b))}")
+          sys.exit(1 if different else 0)
+
+      - name: Upload headless test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-windows64
+          path: build/headless
