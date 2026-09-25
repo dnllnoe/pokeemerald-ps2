@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [ pc_port ]
+  # Any base branch, so pull requests stacked on other pull requests get checked too
   pull_request:
-    branches: [ pc_port ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -34,7 +35,8 @@ jobs:
             g++-mingw-w64-i686 \
             g++-mingw-w64-x86-64 \
             libpng-dev \
-            libsdl2-dev
+            libsdl2-dev \
+            gdb
         # build-essential and git are already installed
         # gcc-arm-none-eabi is only needed for the modern build
         # as an alternative to dkP
@@ -75,7 +77,18 @@ jobs:
       - name: Linux (64-bit)
         env:
           IS64BIT: 1
-        run: make -j${nproc} linux
+        # Debug info (it doesn't change the code) is needed by the data audit below
+        run: make -j${nproc} linux CFLAGS=-g
+
+      - name: Headless tests (Linux 64-bit)
+        run: python3 test/headless/smoke.py ./pokeemerald64 --audit --out build/headless
+
+      - name: Upload headless test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-linux64
+          path: build/headless
 
       #- name: Linux (32-bit)
       #  env:
