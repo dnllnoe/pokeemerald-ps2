@@ -43,8 +43,18 @@ jobs:
 
       - name: Install SDL2 MinGW libraries
         run: |
-          curl -fsSL https://archive.org/download/sdl-2-2.0.16/SDL2-devel-2.0.16-mingw.tar.gz \
-            | tar -xz
+          # SDL's own site first, then the archive.org copy of the same file
+          downloaded=false
+          for url in https://www.libsdl.org/release/SDL2-devel-2.0.16-mingw.tar.gz \
+                     https://archive.org/download/sdl-2-2.0.16/SDL2-devel-2.0.16-mingw.tar.gz; do
+            if curl -fsSL --retry 3 --retry-all-errors -o SDL2-mingw.tar.gz "$url" &&
+               echo "2bfe48628aa9635c12eac7d421907e291525de1d0b04b3bca4a5bd6e6c881a6f  SDL2-mingw.tar.gz" | sha256sum -c -; then
+              downloaded=true
+              break
+            fi
+          done
+          $downloaded
+          tar -xzf SDL2-mingw.tar.gz
           mv SDL2-2.0.16 SDL2
 
       - name: Install agbcc
