@@ -128,7 +128,9 @@ ifeq ($(PORTABLE),1)
 
   ifeq ($(TARGET_OS),WINDOWS)
     OS_CFLAGS :=
-    OS_LFLAGS := -lwinmm -lxinput
+    # xinput9_1_0.dll comes with every Windows since Vista; -lxinput would need
+    # xinput1_3.dll from the old DirectX redistributable
+    OS_LFLAGS := -lwinmm -lxinput9_1_0
     BUILD_FEXTENSION := .exe
   else ifeq ($(IS64BIT),1)
     # Build position independent, so nothing can rely on addresses fitting in 32 bits
