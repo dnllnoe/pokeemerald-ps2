@@ -45,3 +45,8 @@ prefabs.json
 *.js
 /pokeemerald-*.png
 /pokeemerald_modern-*.png
+
+# PC builds
+/pokeemerald32
+/pokeemerald64
+__pycache__/
