@@ -54,8 +54,13 @@ void *AllocInternal(void *heapStart, u32 size)
     u32 foundBlockSize;
 
     // Alignment
+#ifdef PORTABLE
+    // 8 bytes on PC, for the pointers in what gets allocated
+    size = (size + 7) & ~7;
+#else
     if (size & 3)
         size = 4 * ((size / 4) + 1);
+#endif
 
     for (;;)
     {
