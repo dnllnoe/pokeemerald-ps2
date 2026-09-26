@@ -9,12 +9,15 @@
 4. controls: first_battle again, played with keys and controller inputs,
    first with the default bindings and then with remapped ones. Both have to
    give the same frames as first_battle.
-5. soft_reset: continues the first_battle save, walks away and resets with
+5. rival_battle: continues the first_battle save and plays on through the
+   rival battle on Route 103 to the Pokédex, deciding what to press from the
+   game's state (see driver.py). It fights the wild Pokémon it runs into.
+6. soft_reset: continues the first_battle save, walks away and resets with
    A+B+START+SELECT. After the reset, the same input has to give the same
    frames as after power on, and saving has to put the player back where the
    game was saved.
-6. random_play: continues the first_battle save and presses random buttons.
-7. With --audit, audit_data.py (needs gdb and a build with debug info).
+7. random_play: continues the first_battle save and presses random buttons.
+8. With --audit, audit_data.py (needs gdb and a build with debug info).
 
 Every run must exit normally after all of its frames, and give the frames in
 expected_frames.txt. When a change is meant to change them, --update-expected
@@ -134,6 +137,13 @@ def main():
                                             save=continued.save_path, params={"REMAPPED": remapped})
                     if check_run(name, controls, check_frames=False):
                         check(controls.hashes() == battle.hashes(), f"{name} gives the same frames as first_battle")
+
+                # Littleroot Town is map 0.9, and beating the rival pays 300
+                rival = run_scenario(args.binary, "rival_battle", os.path.join(args.out, "rival_battle"),
+                                     save=battle.save_path)
+                if check_run("rival_battle", rival):
+                    check_save("rival_battle", rival.save_path, expect_counter=4, expect_name="AAAAAAA",
+                               expect_money=3300, expect_map="0.9", expect_party=1)
 
                 reset = run_scenario(args.binary, "soft_reset", os.path.join(args.out, "soft_reset"),
                                      save=battle.save_path)

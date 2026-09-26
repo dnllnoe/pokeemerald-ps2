@@ -17,8 +17,8 @@ Everything needs Python 3. The scripts work with any PC build (Linux or Windows)
 
 `smoke.py BINARY` plays a new game up to the first save, continues that save and saves
 again, fights the first battle and saves with the starter, fights it again with keys
-and controller inputs (default and remapped), resets with A+B+START+SELECT and saves
-again, and plays with random buttons. Every run has to finish, and the saves
+and controller inputs (default and remapped), plays on through the rival battle to the
+Pokédex, resets with A+B+START+SELECT and saves again, and plays with random buttons. Every run has to finish, and the saves
 have to be valid GBA-format saves with the expected contents. After the reset, the game
 has to give the same frames as after power on. CI runs it on Linux and Windows for every
 push and pull request.
@@ -42,8 +42,29 @@ game code, and prints what's in it.
 
 ## Scenarios
 
-Scenarios are in `scenarios/`. Each builds `steps`, a list of `(frames, buttons)`, with
-the helpers `tap`, `wait` and `walk` (see `headless.py`):
+Scenarios are in `scenarios/`, in one of two kinds.
+
+A scenario that defines `play(game)` decides what to press from the game's state, which
+the game writes after each input: the map and position, whether a script or a battle is
+going on, the music. `driver.py` has the actions to build one from: `continue_game`,
+`walk_to` (finds the way on the map, around people and as far as it can through no
+grass), `leave_map`, `talk_to`, `finish_dialog`, `fight_battle` and `save_game`:
+
+```python
+def play(game):
+    continue_game(game)
+    walk_to(game, 11, 0)
+    leave_map(game, "UP")                 # to the next map
+    walk_to(game, 10, 4)
+    talk_to(game, "UP")                   # and anything that follows, like a battle
+```
+
+These keep working when something changes on the way, like a wild Pokémon appearing,
+so new scenarios should be written like this (see `scenarios/rival_battle.py`). Their
+input goes to `input.txt` as usual, and `states.jsonl` has every state.
+
+The first scenarios build `steps`, a list of `(frames, buttons)`, with the helpers
+`tap`, `wait` and `walk` (see `headless.py`):
 
 ```python
 steps = wait(300) + tap("START")          # skip the intro
@@ -64,5 +85,6 @@ ImageMagick):
 python3 test/headless/run.py ./pokeemerald64 new_game --shots 60 --sheet
 ```
 
-`--save FILE` starts from a save, and `--param NAME=VALUE` passes values like `SEED`
-and `FRAMES` to `random_play`. Output goes to `build/headless/`.
+`--save FILE` starts from a save, `--param NAME=VALUE` passes values like `SEED`
+and `FRAMES` to `random_play`, and `--audio` writes the sound to `audio.wav`. Output
+goes to `build/headless/`.

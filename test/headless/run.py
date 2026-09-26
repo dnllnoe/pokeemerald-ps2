@@ -33,12 +33,13 @@ def main():
     parser.add_argument("--sheet", action="store_true", help="combine the screenshots into sheet.png")
     parser.add_argument("--sheet-from", type=int, default=0, metavar="FRAME", help="first frame on the sheet")
     parser.add_argument("--param", action="append", default=[], type=parse_param, metavar="NAME=VALUE")
+    parser.add_argument("--audio", action="store_true", help="write the sound to audio.wav")
     args = parser.parse_args()
 
     name = os.path.splitext(os.path.basename(args.scenario))[0]
     out = args.out or os.path.join(REPO_DIR, "build", "headless", name)
     run = run_scenario(args.binary, args.scenario, out, save=args.save, shot_every=args.shots,
-                       params=dict(args.param))
+                       params=dict(args.param), audio=args.audio)
     ran = len(run.hashes())
     print(f"{name}: exit code {run.returncode}, {ran}/{run.frames} frames, output in {out}")
     if run.stderr.strip():
