@@ -272,6 +272,11 @@ SHELL := bash -o pipefail
 # Set flags for tools
 ifeq ($(PORTABLE),1)
   ASFLAGS := --$(BIT_WIDTH) $(ASFLAGS64) --defsym VER_64BIT=$(IS64BIT) --defsym MODERN=$(MODERN) --defsym PORTABLE=1 --defsym UBFIX=1
+  ifeq ($(TARGET_OS),MACOS)
+    # x86_64-elf-as takes / as the start of a comment, like SVR4, which would
+    # quietly cut short the songs' expressions. The Linux one doesn't.
+    ASFLAGS += --divide
+  endif
 else
   ASFLAGS := -mcpu=arm7tdmi --defsym MODERN=$(MODERN)
 endif
