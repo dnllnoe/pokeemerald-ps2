@@ -2935,7 +2935,14 @@ static void PutPageWindowTilemaps(u8 page)
     }
 
     for (i = 0; i < ARRAY_COUNT(sMonSummaryScreen->windowIds); i++)
+    {
+#ifdef UBFIX
+        // Windows that haven't been added are WINDOW_NONE, past the end of gWindows
+        if (sMonSummaryScreen->windowIds[i] == WINDOW_NONE)
+            continue;
+#endif
         PutWindowTilemap(sMonSummaryScreen->windowIds[i]);
+    }
 
     ScheduleBgCopyTilemapToVram(0);
 }

@@ -266,6 +266,11 @@ else ifeq ($(PORTABLE),1)
   ifeq ($(WERROR),1)
     override CFLAGS += -Werror
   endif
+  # e.g. SANITIZE=address,undefined (Linux only). GCC defines shifting into the
+  # sign bit (it's everywhere in GBA code), so that isn't reported.
+  ifneq ($(SANITIZE),)
+    override CFLAGS += -fsanitize=$(SANITIZE) -fno-sanitize=shift-base -fno-omit-frame-pointer
+  endif
   LIB := $(LIBPATH) -lgcc -lc
 else
   # Note: The makefile must be set up to not call these if modern == 0
