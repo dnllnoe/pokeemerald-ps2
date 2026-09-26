@@ -226,16 +226,11 @@ int main(int argc, char **argv)
                     isGameStepDrawn = true;
                 }
                 RunDMAsAndVBlank();
+                // The sound engine runs once a frame, like in the GBA's VBlank
+                // interrupt, so the music keeps time with the game
+                AudioUpdate();
 
                 accumulator -= fixedTimestep;
-            }
-
-            //samples per frame is 701, that gets multipled by two when being queued and then multipled by four because samples are float32 which are 4 bytes long hence the divide by 8
-            //this number is then checked against samples per frame multipled by three rounded down to 2000 to give it enough margin of error while not desyncing
-            //this is all done to sync audio to gameplay
-            if (SDL_GetQueuedAudioSize(1)/8 < 2000)
-            {
-                AudioUpdate();
             }
 
             if (videoScaleChanged)
@@ -339,7 +334,24 @@ void Platform_QueueAudio(float *audioBuffer, s32 samplesPerFrame)
             fwrite(audioBuffer, 1, samplesPerFrame, sTestAudio);
     }
     else
+    {
+        // The game makes a frame of sound every frame, and the device plays it
+        // at the same rate, so the queue only needs fixing when the two come
+        // apart. After a stall it runs dry: start it again with a little silence
+        // in front, so the next frames don't run dry too. When the game gets
+        // ahead, like when it's sped up, drop what can't be played in time.
+        static const float sSilence[MIXED_AUDIO_BUFFER_SIZE * 2];
+        Uint32 queued = SDL_GetQueuedAudioSize(1);
+
+        if (queued > (Uint32)samplesPerFrame * 8)
+            return;
+        if (queued == 0)
+        {
+            for (int i = 0; i < 3; i++)
+                SDL_QueueAudio(1, sSilence, samplesPerFrame);
+        }
         SDL_QueueAudio(1, audioBuffer, samplesPerFrame);
+    }
 }
 
 
