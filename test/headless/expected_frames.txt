@@ -1,0 +1,9 @@
+# A SHA-256 of the video and audio hashes of every frame of each smoke.py run.
+# Every build, on every platform, has to give exactly these frames. When a
+# change is meant to change them, update this file and say why in the commit:
+#   python3 test/headless/smoke.py BINARY --update-expected
+new_game 13950 bd52f22a3b784ebd2398552bfc09eb8500d04e250b70766a1de7eb280fe4c6b4
+continue_game 4932 c3ded9883eb2153a8bf0afb88c9502fbbcbd014369b47b7a5b8de10fe0a43a02
+first_battle 15200 58f77b2a5365e5c9a8f79dc0fa5dd2c23878cc929c818fca6d6a76b6eeb03adc
+soft_reset 3561 f435d9f14069945f782064cbc8fbd1748d0cf7d0f932715ae529d751d539d56a
+random_play 20013 30089a16cdea4f6dc63bc9e05561384d9e1b0c8ff2025102710af576c59d346e

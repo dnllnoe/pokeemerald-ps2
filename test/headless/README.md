@@ -22,6 +22,11 @@ have to be valid GBA-format saves with the expected contents. After the reset, t
 has to give the same frames as after power on. CI runs it on Linux and Windows for every
 push and pull request.
 
+Every run also has to give exactly the frames in `expected_frames.txt`, a SHA-256 of each
+run's frame hashes. Builds agree on them across compilers and platforms, so a difference
+means the game behaves differently. If a change is meant to do that, write the new frames
+with `smoke.py BINARY --update-expected` and commit them with the change.
+
 `smoke.py BINARY --audit` also runs `audit_data.py`, which checks every map and song in
 the running game through gdb: each pointer, count and struct alignment, the way the C
 code reads them. It covers data the scenarios never load. It needs Linux, gdb, and a
