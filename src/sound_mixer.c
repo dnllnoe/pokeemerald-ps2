@@ -130,6 +130,18 @@ returnEarly:
     mixer->lockStatus = MIXER_UNLOCKED;
 }
 
+// A note that fades to its echo volume (on release, or decaying with no sustain)
+// stays at that volume for a while as a pseudo-echo, or stops without one
+static inline bool32 StartEcho(struct MixerSource *chan) {
+    chan->envelopeVol = chan->echoVol;
+    if (chan->echoVol == 0) {
+        chan->status = 0;
+        return FALSE;
+    }
+    chan->status |= 4;
+    return TRUE;
+}
+
 // Returns TRUE if channel is still active after moving envelope forward a frame
 //__attribute__((target("thumb")))
 static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wav) {
@@ -154,27 +166,20 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
         env = chan->envelopeVol;
         
         if (status & 4) {
-            // Note-wise echo
-            --chan->echoVol;
-            if (chan->echoVol <= 0) {
+            // Note-wise echo: the note stays at the echo volume for echoLen frames
+            u8 length = chan->echoLen--;
+            if (length <= 1) {
                 chan->status = 0;
                 return FALSE;
-            } else {
-                return TRUE;
             }
+            return TRUE;
         } else if (status & 0x40) {
             // Release
             chan->envelopeVol = env * chan->release / 256U;
-            u8 echoVol = chan->echoVol;
-            if (chan->envelopeVol > echoVol) {
-                return TRUE;
-            } else if (echoVol == 0) {
-                chan->status = 0;
-                return FALSE;
-            } else {
-                chan->status |= 4;
+            if (chan->envelopeVol > chan->echoVol) {
                 return TRUE;
             }
+            return StartEcho(chan);
         }
         
         switch (status & 3) {
@@ -185,14 +190,7 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
             
             u8 sustain = chan->sustain;
             if (chan->envelopeVol <= sustain && sustain == 0) {
-                // Duplicated echo check from Release section above
-                if (chan->echoVol == 0) {
-                    chan->status = 0;
-                    return FALSE;
-                } else {
-                    chan->status |= 4;
-                    return TRUE;
-                }
+                return StartEcho(chan);
             } else if (chan->envelopeVol <= sustain) {
                 chan->envelopeVol = sustain;
                 --chan->status;
@@ -201,7 +199,8 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
         case 3:
         attack:
             newEnv = env + chan->attack;
-            if (newEnv > 0xFF) {
+            // Reaching 255 ends the attack, like SoundMainRAM's "cmp r5, 0xFF; bcc"
+            if (newEnv >= 0xFF) {
                 chan->envelopeVol = 0xFF;
                 --chan->status;
             } else {

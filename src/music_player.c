@@ -31,6 +31,37 @@ SAME_OFFSET(WaveData2, freq, WaveData, freq);
 SAME_OFFSET(WaveData2, data, WaveData, data);
 
 u32 MidiKeyToFreq(struct WaveData *wav, u8 key, u8 fineAdjust);
+
+extern struct MusicPlayerTrack gMPlayTrack_BGM[10];
+extern struct MusicPlayerTrack gMPlayTrack_SE1[3];
+extern struct MusicPlayerTrack gMPlayTrack_SE2[9];
+extern struct MusicPlayerTrack gMPlayTrack_SE3[1];
+
+// When two notes of the same priority want a channel, ply_note on the GBA lets
+// the one whose track comes first in memory have it. The GBA has the tracks in
+// this order: BGM, SE1, SE2, SE3 (sound/music_player_table.inc), then the cries'.
+// Here the compiler puts the arrays wherever it likes, so notes get compared by
+// their track's place in that order instead of by address. No track comes first.
+static int TrackOrder(const struct MP2KTrack *track) {
+    static const struct { const struct MusicPlayerTrack *tracks; int count; } sTrackArrays[] = {
+        {gMPlayTrack_BGM, ARRAY_COUNT(gMPlayTrack_BGM)},
+        {gMPlayTrack_SE1, ARRAY_COUNT(gMPlayTrack_SE1)},
+        {gMPlayTrack_SE2, ARRAY_COUNT(gMPlayTrack_SE2)},
+        {gMPlayTrack_SE3, ARRAY_COUNT(gMPlayTrack_SE3)},
+        {gPokemonCryTracks, MAX_POKEMON_CRIES * 2},
+    };
+    const struct MusicPlayerTrack *t = (const struct MusicPlayerTrack *)track;
+    int order = 0;
+
+    if (track == NULL)
+        return -1;
+    for (size_t i = 0; i < ARRAY_COUNT(sTrackArrays); i++) {
+        if (t >= sTrackArrays[i].tracks && t < sTrackArrays[i].tracks + sTrackArrays[i].count)
+            return order + (t - sTrackArrays[i].tracks);
+        order += sTrackArrays[i].count;
+    }
+    return order;
+}
 void ChnVolSetAsm(struct MixerSource *chan, struct MP2KTrack *track);
 float *cgb_get_buffer();
 extern void * const gMPlayJumpTableTemplate[];
@@ -631,7 +662,7 @@ void MP2K_event_nxx(u8 clock, struct MP2KPlayerState *player, struct MP2KTrack *
         if ((chan->status & SOUND_CHANNEL_SF_ON) 
         && (chan->status & SOUND_CHANNEL_SF_STOP) == 0) {
             // then make sure this note is higher priority (or same priority but from a later track).
-            if (chan->priority > priority || (chan->priority == priority && chan->track < track)) {
+            if (chan->priority > priority || (chan->priority == priority && TrackOrder(chan->track) < TrackOrder(track))) {
                 return;
             }
         }
@@ -664,7 +695,7 @@ void MP2K_event_nxx(u8 clock, struct MP2KPlayerState *player, struct MP2KTrack *
                     p = currChan->priority;
                     t = currChan->track;
                     chan = currChan;
-                } else if (currChan->priority == p && currChan->track > t) {
+                } else if (currChan->priority == p && TrackOrder(currChan->track) > TrackOrder(t)) {
                     t = currChan->track;
                     chan = currChan;
                 } else if (currChan->priority == p && currChan->track == t) {
