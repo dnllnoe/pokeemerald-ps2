@@ -115,6 +115,37 @@ jobs:
       #    IS64BIT: 0
       #  run: make -j${nproc} linux
 
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Install libraries
+        run: |
+          sudo apt update
+          sudo apt install libpng-dev libsdl2-dev
+
+      # ASan can't map its shadow memory with the runner kernel's default ASLR entropy
+      - name: Reduce ASLR entropy
+        run: sudo sysctl vm.mmap_rnd_bits=28
+
+      - name: Linux (64-bit, ASan and UBSan)
+        run: make -j$(nproc) linux CFLAGS=-g WERROR=1 SANITIZE=address,undefined
+
+      - name: Headless tests
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: python3 test/headless/smoke.py ./pokeemerald64 --out build/headless
+
+      - name: Upload headless test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-sanitizers
+          path: build/headless
+
   windows-test:
     needs: build
     runs-on: windows-latest
