@@ -18,6 +18,19 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
 void GeneratePokemonSampleAudio(struct SoundMixerState *mixer, struct MixerSource *chan, s8 *current, float *outBuffer, u16 samplesPerFrame, float sampleRateReciprocal, s32 samplesLeftInWav, signed envR, signed envL, s32 loopLen);
 static s8 sub_82DF758(struct MixerSource *chan, u32 current);
 
+// Emerald mixes its sound at 13379 Hz on the GBA (SOUND_MODE_FREQ_13379), and the
+// samples of fixed-frequency instruments, like most of the drums, play at that
+// rate: one sample for each sample of output. The PC mixes at a higher rate, so
+// it steps through them more slowly, or they'd play three times too fast.
+#define GBA_MIXING_RATE 13379.0f
+
+static inline float SamplesPerOutputSample(const struct MixerSource *chan, float sampleRateReciprocal)
+{
+    if (chan->type & 8)
+        return GBA_MIXING_RATE * sampleRateReciprocal;
+    return chan->freq * sampleRateReciprocal;
+}
+
 void RunMixerFrame(void) {
     struct SoundMixerState *mixer = (struct SoundMixerState *)SOUND_INFO_PTR;
     
@@ -246,28 +259,9 @@ static inline void GenerateAudio(struct SoundMixerState *mixer, struct MixerSour
     }
     else
 #endif
-    if (chan->type & 8) {
-        for (u16 i = 0; i < samplesPerFrame; i++, outBuffer+=2) {
-            sf8 c = *(current++);
-            
-            outBuffer[1] += (c * envR) / 32768.0f;
-            outBuffer[0] += (c * envL) / 32768.0f;
-            if (--samplesLeftInWav == 0) {
-                samplesLeftInWav = loopLen;
-                if (loopLen != 0) {
-                    current = loopStart;
-                } else {
-                    chan->status = 0;
-                    return;
-                }
-            }
-        }
-        
-        chan->ct = samplesLeftInWav;
-        chan->current = current;
-    } else {
+    {
         float finePos = chan->fw;
-        float romSamplesPerOutputSample = chan->freq * sampleRateReciprocal;
+        float romSamplesPerOutputSample = SamplesPerOutputSample(chan, sampleRateReciprocal);
 
         sf16 b = current[0];
         sf16 m = current[1] - b;
@@ -341,7 +335,7 @@ void GeneratePokemonSampleAudio(struct SoundMixerState *mixer, struct MixerSourc
             chan->current = current;
         }
     }
-    float romSamplesPerOutputSample = chan->type & 8 ? 1.0f : chan->freq * sampleRateReciprocal;
+    float romSamplesPerOutputSample = SamplesPerOutputSample(chan, sampleRateReciprocal);
     if(wav->type != 0) { // is compressed
         chan->blockCount = 0xFF000000;
         if(chan->type & 0x10) { // is reverse
