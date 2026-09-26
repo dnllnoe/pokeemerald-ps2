@@ -20,12 +20,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@master
 
-      - name: Checkout agbcc
-        uses: actions/checkout@master
-        with:
-          path: agbcc
-          repository: pret/agbcc
-
       - name: Install binutils
         run: |
           sudo apt update
@@ -57,17 +51,6 @@ jobs:
           tar -xzf SDL2-mingw.tar.gz
           mv SDL2-2.0.16 SDL2
 
-      - name: Install agbcc
-        run: |
-          ./build.sh
-          ./install.sh ../
-        working-directory: agbcc
-
-      - name: agbcc
-        env:
-          COMPARE: 0
-        run: make -j${nproc} all syms
-
       - name: Modern
         env:
           MODERN: 1
@@ -78,7 +61,7 @@ jobs:
         env:
           IS64BIT: 1
         run: |
-          make -j${nproc} winwsl
+          make -j${nproc} winwsl WERROR=1
           cp SDL2/x86_64-w64-mingw32/bin/SDL2.dll .
 
       - name: Upload Windows (64-bit) build
@@ -92,13 +75,13 @@ jobs:
       - name: Windows (32-bit)
         env:
           IS64BIT: 0
-        run: make -j${nproc} winwsl
+        run: make -j${nproc} winwsl WERROR=1
 
       - name: Linux (64-bit)
         env:
           IS64BIT: 1
         # Debug info (it doesn't change the code) is needed by the data audit below
-        run: make -j${nproc} linux CFLAGS=-g
+        run: make -j${nproc} linux CFLAGS=-g WERROR=1
 
       - name: Headless tests (Linux 64-bit)
         run: python3 test/headless/smoke.py ./pokeemerald64 --audit --out build/headless
@@ -114,6 +97,52 @@ jobs:
       #  env:
       #    IS64BIT: 0
       #  run: make -j${nproc} linux
+
+  # The PC port is built from the same code as the GBA ROM, and changes for the port
+  # shouldn't change the ROM, so pull requests compare it with the base branch's
+  gba-rom:
+    runs-on: ubuntu-latest
+    env:
+      COMPARE: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+        with:
+          fetch-depth: 0
+
+      - name: Checkout agbcc
+        uses: actions/checkout@master
+        with:
+          path: agbcc
+          repository: pret/agbcc
+
+      - name: Install binutils
+        run: |
+          sudo apt update
+          sudo apt install binutils-arm-none-eabi libpng-dev
+
+      - name: Install agbcc
+        run: |
+          ./build.sh
+          ./install.sh ../
+        working-directory: agbcc
+
+      - name: agbcc
+        run: |
+          make -j$(nproc) all syms
+          sha1sum pokeemerald.gba
+
+      - name: Compare with the base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          git worktree add ../base ${{ github.event.pull_request.base.sha }}
+          cp -r tools/agbcc ../base/tools/
+          make -C ../base -j$(nproc) all
+          sha1sum pokeemerald.gba ../base/pokeemerald.gba
+          if ! cmp -s pokeemerald.gba ../base/pokeemerald.gba; then
+            echo "::error::The GBA ROM differs from the one built from the base branch"
+            exit 1
+          fi
 
   sanitizers:
     runs-on: ubuntu-latest
