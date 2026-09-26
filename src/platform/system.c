@@ -1,5 +1,6 @@
 #ifdef PORTABLE
 #ifdef _WIN32
+#define NOMINMAX // global.h has its own
 #include <windows.h>
 #endif
 #include <stdlib.h>

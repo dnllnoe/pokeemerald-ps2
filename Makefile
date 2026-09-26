@@ -262,9 +262,11 @@ else ifeq ($(PORTABLE),1)
   # GetMonData filling in a name with no buffer to write to, and which ones it
   # reports changes between versions
   override CFLAGS += -Wno-stringop-overflow
-  # CI builds with WERROR=1, so that new warnings fail the build
+  # CI builds with WERROR=1, so that new warnings fail the build. The
+  # preprocessor runs on its own, so it needs the flag too.
   ifeq ($(WERROR),1)
     override CFLAGS += -Werror
+    CPPFLAGS += -Werror
   endif
   # e.g. SANITIZE=address,undefined (Linux only). GCC defines shifting into the
   # sign bit (it's everywhere in GBA code), so that isn't reported.

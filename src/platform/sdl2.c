@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#define NOMINMAX // global.h has its own
 #ifdef _WIN32
 #include <windows.h>
 #include <xinput.h>

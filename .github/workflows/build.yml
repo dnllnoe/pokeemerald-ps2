@@ -77,6 +77,12 @@ jobs:
           IS64BIT: 0
         run: make -j${nproc} winwsl WERROR=1
 
+      # The backend without SDL, so that it keeps building
+      - name: Windows (64-bit, Win32 backend)
+        env:
+          IS64BIT: 1
+        run: make -j${nproc} winwsl WERROR=1 TARGET_PLATFORM=PLATFORM_WIN32
+
       - name: Linux (64-bit)
         env:
           IS64BIT: 1
