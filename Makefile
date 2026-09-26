@@ -387,6 +387,16 @@ OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 SUBDIRS  := $(sort $(dir $(OBJS)))
 $(shell mkdir -p $(SUBDIRS))
 
+# Make only compares timestamps, so rebuild everything when the flags change
+ifeq ($(SETUP_PREREQS),1)
+  BUILD_FLAGS := $(strip $(CC1) $(CPPFLAGS) $(CFLAGS) $(AS) $(ASFLAGS) $(PLATFORM_LFLAGS) $(OS_LFLAGS))
+  BUILD_FLAGS_FILE := $(OBJ_DIR)/build_flags.txt
+  ifneq ($(BUILD_FLAGS),$(strip $(shell cat $(BUILD_FLAGS_FILE) 2>/dev/null)))
+    $(shell printf '%s\n' '$(BUILD_FLAGS)' > $(BUILD_FLAGS_FILE))
+  endif
+  $(OBJS): $(BUILD_FLAGS_FILE)
+endif
+
 # Pretend rules that are actually flags defer to `make all`
 modern: all
 compare: all
