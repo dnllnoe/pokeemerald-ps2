@@ -44,7 +44,7 @@ double timeScale = 1.0;
 struct SiiRtcInfo internalClock;
 
 static FILE *sSaveFile = NULL;
-static const char *sSavePath = "pokeemerald.sav";
+static const char *sSavePath;
 
 // Headless test mode, see RunTestMode()
 static bool sTestMode = false;
@@ -70,6 +70,7 @@ static void InitInternalClock(void);
 static void UpdateInternalClock(void);
 
 static bool ParseArgs(int argc, char **argv);
+static void FindSaveFile(void);
 static int RunTestMode(void);
 
 int main(int argc, char **argv)
@@ -84,6 +85,8 @@ int main(int argc, char **argv)
     if (!ParseArgs(argc, argv))
         return 1;
 
+    if (sSavePath == NULL)
+        FindSaveFile();
     ReadSaveFile(sSavePath);
     // Before AgbMain, whose RtcInit reads it
     InitInternalClock();
@@ -674,6 +677,27 @@ static bool ParseArgs(int argc, char **argv)
         }
     }
     return true;
+}
+
+// The save goes in the user's data folder, unless there's one in the current
+// directory, where earlier versions kept it. The test mode uses the current
+// directory's, or the one it's given.
+static void FindSaveFile(void)
+{
+    static char path[1024];
+    char *dataDir = NULL;
+    FILE *oldSave = fopen("pokeemerald.sav", "rb");
+
+    if (oldSave != NULL)
+        fclose(oldSave);
+    else if (!sTestMode)
+        dataDir = SDL_GetPrefPath("", "pokeemerald");
+
+    snprintf(path, sizeof(path), "%spokeemerald.sav", dataDir != NULL ? dataDir : "");
+    sSavePath = path;
+    SDL_free(dataDir);
+    if (!sTestMode)
+        printf("Save file: %s\n", sSavePath);
 }
 
 // Reads the keys to hold for the next frame from the test input. Each line is
