@@ -11,7 +11,6 @@
 
 STUB_FUNC_QUIET_BLOCK(bool8 HandleLinkConnection(), return 0;)
 STUB_FUNC(int MultiBoot(struct MultiBootParam *mp))
-STUB_FUNC(void RegisterRamReset(u32 resetFlags))
 STUB_FUNC(void IntrMain())
 STUB_FUNC(void GameCubeMultiBoot_Hash())
 STUB_FUNC_QUIET(void GameCubeMultiBoot_Main())

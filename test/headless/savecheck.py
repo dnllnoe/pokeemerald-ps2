@@ -108,7 +108,7 @@ class Save:
 
 
 def check(path, expect_map=None, expect_money=None, expect_counter=None, expect_name=None, expect_party=None,
-          expect_clock_days=None):
+          expect_position=None, expect_clock_days=None):
     """Returns (save, list of problems)."""
     try:
         save = Save(path)
@@ -125,6 +125,8 @@ def check(path, expect_map=None, expect_money=None, expect_counter=None, expect_
         problems.append(f"name is {save.name!r}, expected {expect_name!r}")
     if expect_party is not None and save.party_count != expect_party:
         problems.append(f"party has {save.party_count}, expected {expect_party}")
+    if expect_position is not None and save.position != expect_position:
+        problems.append(f"position is {save.position}, expected {expect_position}")
     if expect_clock_days is not None and save.clock_offset[0] != expect_clock_days:
         problems.append(f"the clock was set on day {save.clock_offset[0]} of the RTC, expected {expect_clock_days}")
     return save, problems

@@ -35,11 +35,16 @@ def walk(direction, tiles):
 def load_scenario(scenario, **params):
     """Returns the steps of a scenario, given by name (see scenarios/) or path.
     `params` are made available to the scenario as variables."""
+    return scenario_variables(scenario, **params)["steps"]
+
+
+def scenario_variables(scenario, **params):
+    """Returns all of the variables a scenario sets, like load_scenario."""
     path = scenario if scenario.endswith(".py") else os.path.join(SCENARIO_DIR, scenario + ".py")
     namespace = {"tap": tap, "wait": wait, "walk": walk, **params}
     with open(path) as f:
         exec(compile(f.read(), path, "exec"), namespace)
-    return namespace["steps"]
+    return namespace
 
 
 class Run:

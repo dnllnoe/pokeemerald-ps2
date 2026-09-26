@@ -6,8 +6,12 @@
 2. continue_game: continues that save, plays on and saves again.
 3. first_battle: continues that save, fights the first battle and saves with
    the starter in the party.
-4. random_play: continues the last save and presses random buttons.
-5. With --audit, audit_data.py (needs gdb and a build with debug info).
+4. soft_reset: continues that save, walks away and resets with
+   A+B+START+SELECT. After the reset, the same input has to give the same
+   frames as after power on, and saving has to put the player back where the
+   game was saved.
+5. random_play: continues the first_battle save and presses random buttons.
+6. With --audit, audit_data.py (needs gdb and a build with debug info).
 
 Every run must exit normally after all of its frames.
 
@@ -20,7 +24,7 @@ import subprocess
 import sys
 
 import savecheck
-from headless import REPO_DIR, TEST_DIR, run_scenario
+from headless import REPO_DIR, TEST_DIR, run_scenario, scenario_variables
 
 failures = []
 
@@ -74,6 +78,18 @@ def main():
             if check_run("first_battle", battle):
                 check_save("first_battle", battle.save_path, expect_counter=3, expect_name="AAAAAAA",
                            expect_money=3000, expect_map="1.4", expect_party=1)
+
+                reset = run_scenario(args.binary, "soft_reset", os.path.join(args.out, "soft_reset"),
+                                     save=battle.save_path)
+                if check_run("soft_reset", reset):
+                    variables = scenario_variables("soft_reset")
+                    hashes, count = reset.hashes(), variables["START_FRAMES"]
+                    after_reset = hashes[variables["RESET_FRAME"] + 1:][:count]
+                    check(after_reset == hashes[:count],
+                          f"soft_reset starts over like at power on ({count} frames with the same input)")
+                    # Where first_battle saved
+                    check_save("soft_reset", reset.save_path, expect_counter=4, expect_map="1.4",
+                               expect_party=1, expect_position=(6, 5))
 
                 random_play = run_scenario(args.binary, "random_play", os.path.join(args.out, "random_play"),
                                            save=battle.save_path,

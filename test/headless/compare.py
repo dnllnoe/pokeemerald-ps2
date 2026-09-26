@@ -35,7 +35,7 @@ def main():
 
     # (name, scenario, parameters, name of the run whose baseline save to start from)
     runs = [("new_game", "new_game", {}, None), ("continue_game", "continue_game", {}, "new_game"),
-            ("first_battle", "first_battle", {}, "continue_game")]
+            ("first_battle", "first_battle", {}, "continue_game"), ("soft_reset", "soft_reset", {}, "first_battle")]
     for seed in args.random_seeds.split(","):
         runs.append((f"random_play_{seed}", "random_play", {"SEED": int(seed), "FRAMES": args.random_frames},
                      "first_battle"))

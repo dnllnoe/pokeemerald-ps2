@@ -16,9 +16,11 @@ Everything needs Python 3. The scripts work with any PC build (Linux or Windows)
 ## Checks
 
 `smoke.py BINARY` plays a new game up to the first save, continues that save and saves
-again, fights the first battle and saves with the starter, and plays with random
-buttons. Every run has to finish, and the saves have to be valid GBA-format saves with
-the expected contents. CI runs it on Linux and Windows for every push and pull request.
+again, fights the first battle and saves with the starter, resets with A+B+START+SELECT
+and saves again, and plays with random buttons. Every run has to finish, and the saves
+have to be valid GBA-format saves with the expected contents. After the reset, the game
+has to give the same frames as after power on. CI runs it on Linux and Windows for every
+push and pull request.
 
 `smoke.py BINARY --audit` also runs `audit_data.py`, which checks every map and song in
 the running game through gdb: each pointer, count and struct alignment, the way the C

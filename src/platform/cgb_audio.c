@@ -14,26 +14,14 @@ u16 lfsrMax[2];
 float ch4Samples;
 
 void cgb_audio_init(u32 rate){
-    gb.ch1Freq = 0;
-    gb.ch1SweepCounter = 0;
-    gb.ch1SweepCounterI = 0;
-    gb.ch1SweepDir = 0;
-    gb.ch1SweepShift = 0;
-    for (u8 ch = 0; ch < 4; ch++){
-        gb.Vol[ch] = 0;
-        gb.VolI[ch] = 0;
-        gb.Len[ch] = 0;
-        gb.LenI[ch] = 0;
-        gb.LenOn[ch] = 0;
-        gb.EnvCounter[ch] = 0;
-        gb.EnvCounterI[ch] = 0;
-        gb.EnvDir[ch] = 0;
-        gb.DAC[ch] = 0;
-        soundChannelPos[ch] = 0;
-    }
+    // Everything starts from zero, also after a soft reset
+    memset(&gb, 0, sizeof(gb));
+    memset(soundChannelPos, 0, sizeof(soundChannelPos));
     soundChannelPos[1] = 1;
     PU1Table = PU0;
     PU2Table = PU0;
+    apuFrame = 0;
+    apuCycle = 0;
     sampleRate = rate;
     gb.ch4LFSR[0] = 0x8000;
     gb.ch4LFSR[1] = 0x80;

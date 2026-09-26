@@ -1,5 +1,6 @@
 #ifdef PLATFORM_SDL2
 #include <assert.h>
+#include <setjmp.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
@@ -55,9 +56,15 @@ static time_t sTestClockBase = 1767268800; // 2026-01-01 12:00:00 UTC
 static u32 sTestFrame;
 static u64 sTestAudioHash;
 
+// Soft reset, see SoftReset()
+static jmp_buf sSoftResetJump;
+static bool sInMainLoop;
+static bool sSoftResetRequested;
+
 extern void AgbMain(void);
 extern void MainLoop(void);
 extern void DoSoftReset(void);
+extern bool8 gSoftResetDisabled;
 
 int DoMain(void *param);
 void ProcessEvents(void);
@@ -67,14 +74,15 @@ static void ReadSaveFile(const char *path);
 static void StoreSaveFile(void);
 static void CloseSaveFile(void);
 
+static void InitInternalClock(void);
 static void UpdateInternalClock(void);
 
 static bool ParseArgs(int argc, char **argv);
 static int RunTestMode(void);
+static bool RunMainLoop(void);
 
 int main(int argc, char **argv)
 {
-static void InitInternalClock(void);
     // Open an output console on Windows
 #ifdef _WIN32
     AllocConsole() ;
@@ -86,6 +94,8 @@ static void InitInternalClock(void);
         return 1;
 
     ReadSaveFile(sSavePath);
+    // Before AgbMain, whose RtcInit reads it
+    InitInternalClock();
 
     if (sTestMode)
         return RunTestMode();
@@ -94,8 +104,6 @@ static void InitInternalClock(void);
     {
         DBGPRINTF("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 1;
-    // Before AgbMain, whose RtcInit reads it
-    InitInternalClock();
     }
 
     sdlWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
@@ -176,7 +184,12 @@ static void InitInternalClock(void);
             {
                 //run game logic, draw frame and process DMAs and vblank
                 ENTER_VBLANK(); //you must be in VBlank before running a game tick
-                MainLoop();
+                if (!RunMainLoop())
+                {
+                    // After a soft reset, the next frame starts with MainLoop, like at startup
+                    accumulator -= fixedTimestep;
+                    continue;
+                }
                 if (!isGameStepDrawn)
                 {
                     VDraw(sdlTexture);
@@ -376,7 +389,7 @@ void ProcessEvents(void)
             case SDLK_r:
                 if (event.key.keysym.mod & (KMOD_LCTRL | KMOD_RCTRL))
                 {
-                    DoSoftReset();
+                    sSoftResetRequested = true;
                 }
                 break;
             case SDLK_p:
@@ -527,6 +540,13 @@ void Platform_SetStatus(struct SiiRtcInfo *rtc)
     internalClock.status = rtc->status;
 }
 
+static void InitInternalClock(void)
+{
+    memset(&internalClock, 0, sizeof(internalClock));
+    internalClock.status = SIIRTCINFO_24HOUR;
+    UpdateInternalClock();
+}
+
 static void UpdateInternalClock(void)
 {
     struct tm *now;
@@ -540,13 +560,6 @@ static void UpdateInternalClock(void)
     else
     {
         time_t rawTime = time(NULL);
-static void InitInternalClock(void)
-{
-    memset(&internalClock, 0, sizeof(internalClock));
-    internalClock.status = SIIRTCINFO_24HOUR;
-    UpdateInternalClock();
-}
-
         now = localtime(&rawTime);
     }
 
@@ -612,10 +625,44 @@ void Platform_SetAlarm(u8 *alarmData)
     // The game never sets an alarm
 }
 
+// On the GBA, SoftReset clears the RAM and starts the ROM over. Here it clears
+// the game's memory and jumps back to RunMainLoop, which starts the game over
+// with AgbMain. The save flash and the clock keep their state, as on the GBA.
 void SoftReset(u32 resetFlags)
 {
-    puts("Soft Reset called. Exiting.");
-    exit(0);
+    if (!sInMainLoop)
+    {
+        fputs("SoftReset was called outside of MainLoop\n", stderr);
+        exit(1);
+    }
+    RegisterRamReset(resetFlags);
+    longjmp(sSoftResetJump, 1);
+}
+
+// Runs a frame of the game and returns true, or if the game did a soft reset,
+// starts it over with AgbMain and returns false
+static bool RunMainLoop(void)
+{
+    if (setjmp(sSoftResetJump) != 0)
+    {
+        sInMainLoop = false;
+        if (!sTestMode)
+            SDL_ClearQueuedAudio(1);
+        cgb_audio_init(42048);
+        AgbMain();
+        return false;
+    }
+
+    sInMainLoop = true;
+    // Ctrl+R, which waits while the game doesn't allow resets, like when it saves
+    if (sSoftResetRequested && !gSoftResetDisabled)
+    {
+        sSoftResetRequested = false;
+        DoSoftReset();
+    }
+    MainLoop();
+    sInMainLoop = false;
+    return true;
 }
 
 // All options take a value. Anything else is ignored, like before there were
@@ -768,15 +815,20 @@ static int RunTestMode(void)
 
     for (sTestFrame = 0; ReadTestInput(&keys); sTestFrame++)
     {
+        bool ranFrame;
+
         ENTER_VBLANK();
-        MainLoop();
+        ranFrame = RunMainLoop();
         memset(image, 0, sizeof(image));
         DrawFrame(image);
         REG_VCOUNT = 161;
-        RunDMAsAndVBlank();
-
         sTestAudioHash = 0xCBF29CE484222325ull;
-        AudioUpdate();
+        // After a soft reset, the next frame starts with MainLoop, like at startup
+        if (ranFrame)
+        {
+            RunDMAsAndVBlank();
+            AudioUpdate();
+        }
 
         if (sTestHashes != NULL)
             fprintf(sTestHashes, "%u %016llx %016llx\n", sTestFrame,
