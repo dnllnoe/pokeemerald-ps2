@@ -142,10 +142,7 @@ static inline uint32_t getBgX(int bgNumber)
     {
         return REG_BG2X;
     }
-    else if (bgNumber == 3)
-    {
-        return REG_BG3X;
-    }
+    return REG_BG3X;
 }
 
 static inline uint32_t getBgY(int bgNumber)
@@ -154,10 +151,7 @@ static inline uint32_t getBgY(int bgNumber)
     {
         return REG_BG2Y;
     }
-    else if (bgNumber == 3)
-    {
-        return REG_BG3Y;
-    }
+    return REG_BG3Y;
 }
 
 static inline uint16_t getBgPA(int bgNumber)
@@ -166,10 +160,7 @@ static inline uint16_t getBgPA(int bgNumber)
     {
         return REG_BG2PA;
     }
-    else if (bgNumber == 3)
-    {
-        return REG_BG3PA;
-    }
+    return REG_BG3PA;
 }
 
 static inline uint16_t getBgPB(int bgNumber)
@@ -178,10 +169,7 @@ static inline uint16_t getBgPB(int bgNumber)
     {
         return REG_BG2PB;
     }
-    else if (bgNumber == 3)
-    {
-        return REG_BG3PB;
-    }
+    return REG_BG3PB;
 }
 
 static inline uint16_t getBgPC(int bgNumber)
@@ -190,10 +178,7 @@ static inline uint16_t getBgPC(int bgNumber)
     {
         return REG_BG2PC;
     }
-    else if (bgNumber == 3)
-    {
-        return REG_BG3PC;
-    }
+    return REG_BG3PC;
 }
 
 static inline uint16_t getBgPD(int bgNumber)
@@ -202,10 +187,7 @@ static inline uint16_t getBgPD(int bgNumber)
     {
         return REG_BG2PD;
     }
-    else if (bgNumber == 3)
-    {
-        return REG_BG3PD;
-    }
+    return REG_BG3PD;
 }
 
 static void RenderRotScaleBGScanline(int bgNum, uint16_t control, uint16_t x, uint16_t y, int lineNum, uint16_t *line)
@@ -872,10 +854,11 @@ static void DrawScanline(uint16_t *pixels, uint16_t vcount)
 
 uint16_t *memsetu16(uint16_t *dst, uint16_t fill, size_t count)
 {
-    for (int i = 0; i < count; i++)
+    for (size_t i = 0; i < count; i++)
     {
-        *dst++ = fill;
+        dst[i] = fill;
     }
+    return dst;
 }
 
 void DrawFrame(uint16_t *pixels)

@@ -455,6 +455,7 @@ void VDraw(SDL_Texture *texture)
 int DoMain(void *data)
 {
     AgbMain();
+    return 0;
 }
 
 void VBlankIntrWait(void)

@@ -10,7 +10,7 @@
 #define STUB_FUNC_QUIET_BLOCK(func, block) func { block }
 
 STUB_FUNC_QUIET_BLOCK(bool8 HandleLinkConnection(), return 0;)
-STUB_FUNC(int MultiBoot(struct MultiBootParam *mp))
+STUB_FUNC_BLOCK(int MultiBoot(struct MultiBootParam *mp), return 0;)
 STUB_FUNC(void IntrMain())
 STUB_FUNC(void GameCubeMultiBoot_Hash())
 STUB_FUNC_QUIET(void GameCubeMultiBoot_Main())
@@ -219,9 +219,9 @@ STUB_FUNC(void SetPokemonCryPriority(u8 val))
 STUB_FUNC(void IsPokemonCryPlaying(struct MusicPlayerInfo *mplayInfo))
 */
 STUB_FUNC(void MultiBootInit(struct MultiBootParam *mp))
-STUB_FUNC(int MultiBootMain(struct MultiBootParam *mp))
+STUB_FUNC_BLOCK(int MultiBootMain(struct MultiBootParam *mp), return 0;)
 STUB_FUNC(void MultiBootStartProbe(struct MultiBootParam *mp))
 STUB_FUNC(void MultiBootStartMaster(struct MultiBootParam *mp, const u8 *srcp, int length, u8 palette_color, s8 palette_speed))
-STUB_FUNC(int MultiBootCheckComplete(struct MultiBootParam *mp))
+STUB_FUNC_BLOCK(int MultiBootCheckComplete(struct MultiBootParam *mp), return 0;)
 //STUB_FUNC(IntrFunc IntrSIO32(void))
 #endif //PORTABLE

@@ -261,6 +261,14 @@ COMMON_DATA u8 (*gFactorySelect_CurrentOptionFunc)(void) = NULL;
 static const u16 sPokeballGray_Pal[]         = INCGFX_U16("graphics/battle_frontier/factory_screen/pokeball_gray.pal", ".gbapal");
 static const u16 sPokeballSelected_Pal[]     = INCGFX_U16("graphics/battle_frontier/factory_screen/pokeball_selected.pal", ".gbapal");
 static const u16 sInterface_Pal[]            = INCGFX_U16("graphics/battle_frontier/factory_screen/interface.pal", ".gbapal"); // Arrow, menu/action highlights, action box, etc
+
+// The color the swap screen's text fades to. It's read from past the end of
+// sPokeballGray_Pal, which on the GBA is in sInterface_Pal, two palettes on.
+#ifdef UBFIX
+#define SWAP_TEXT_FADE_COLOR sInterface_Pal[5]
+#else
+#define SWAP_TEXT_FADE_COLOR sPokeballGray_Pal[37]
+#endif
 static const u8 sPokeball_Gfx[]              = INCGFX_U8("graphics/battle_frontier/factory_screen/pokeball.png", ".4bpp"); // Unused, gPokeballSelection_Gfx used instead
 static const u8 sArrow_Gfx[]                 = INCGFX_U8("graphics/battle_frontier/factory_screen/arrow.png", ".4bpp");
 static const u8 sMenuHighlightLeft_Gfx[]     = INCGFX_U8("graphics/battle_frontier/factory_screen/menu_highlight_left.png", ".4bpp");
@@ -2999,7 +3007,7 @@ static void Swap_Task_ScreenInfoTransitionOut(u8 taskId)
         gTasks[taskId].tState++;
         break;
     case 2:
-        BeginNormalPaletteFade(1 << PALNUM_FADE_TEXT, 0, 0, 16, sPokeballGray_Pal[37]);
+        BeginNormalPaletteFade(1 << PALNUM_FADE_TEXT, 0, 0, 16, SWAP_TEXT_FADE_COLOR);
         gTasks[taskId].tState++;
         break;
     case 3:
@@ -3117,14 +3125,14 @@ static void Swap_Task_ScreenInfoTransitionIn(u8 taskId)
         if (gTasks[taskId].tSlideFinishedPkmn == TRUE
          && gTasks[taskId].tSlideFinishedCancel == TRUE)
         {
-            gPlttBufferFaded[BG_PLTT_ID(PALNUM_FADE_TEXT) + 2] = sPokeballGray_Pal[37];
+            gPlttBufferFaded[BG_PLTT_ID(PALNUM_FADE_TEXT) + 2] = SWAP_TEXT_FADE_COLOR;
             Swap_PrintActionStrings();
             PutWindowTilemap(SWAP_WIN_ACTION_FADE);
             gTasks[taskId].tState++;
         }
         break;
     case 3:
-        BeginNormalPaletteFade(1 << PALNUM_FADE_TEXT, 0, 16, 0, sPokeballGray_Pal[37]);
+        BeginNormalPaletteFade(1 << PALNUM_FADE_TEXT, 0, 16, 0, SWAP_TEXT_FADE_COLOR);
         gTasks[taskId].tState++;
         break;
     case 4:
