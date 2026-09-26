@@ -55,11 +55,13 @@ def main():
     parser.add_argument("--audit", action="store_true", help="also run audit_data.py")
     args = parser.parse_args()
 
-    # Brendan's room is map 1.1, the house's first floor 1.0 and Birch's lab 1.4
+    # Brendan's room is map 1.1, the house's first floor 1.0 and Birch's lab 1.4.
+    # The clock gets set in new_game, on the test clock's date (2026-01-01),
+    # which is day 9498 of the RTC.
     new_game = run_scenario(args.binary, "new_game", os.path.join(args.out, "new_game"))
     if check_run("new_game", new_game):
         check_save("new_game", new_game.save_path, expect_counter=1, expect_name="AAAAAAA",
-                   expect_money=3000, expect_map="1.1", expect_party=0)
+                   expect_money=3000, expect_map="1.1", expect_party=0, expect_clock_days=9498)
 
         continued = run_scenario(args.binary, "continue_game", os.path.join(args.out, "continue_game"),
                                  save=new_game.save_path)

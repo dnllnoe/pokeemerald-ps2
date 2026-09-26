@@ -95,6 +95,10 @@ class Save:
         self.map = struct.unpack_from("<bb", sb1, 0x04)
         self.party_count = sb1[0x234]
         self.money = struct.unpack_from("<I", sb1, 0x490)[0] ^ key
+        # The in-game clock is the RTC minus this offset, in days, hours, minutes
+        # and seconds. Setting the clock takes the day from the RTC, which counts
+        # from 2000-01-01 as day 1.
+        self.clock_offset = struct.unpack_from("<hbbb", sb2, 0x98)
 
     def summary(self):
         hours, minutes, seconds = self.play_time
@@ -103,7 +107,8 @@ class Save:
                 f"party {self.party_count}, time {hours}:{minutes:02}:{seconds:02}")
 
 
-def check(path, expect_map=None, expect_money=None, expect_counter=None, expect_name=None, expect_party=None):
+def check(path, expect_map=None, expect_money=None, expect_counter=None, expect_name=None, expect_party=None,
+          expect_clock_days=None):
     """Returns (save, list of problems)."""
     try:
         save = Save(path)
@@ -120,6 +125,8 @@ def check(path, expect_map=None, expect_money=None, expect_counter=None, expect_
         problems.append(f"name is {save.name!r}, expected {expect_name!r}")
     if expect_party is not None and save.party_count != expect_party:
         problems.append(f"party has {save.party_count}, expected {expect_party}")
+    if expect_clock_days is not None and save.clock_offset[0] != expect_clock_days:
+        problems.append(f"the clock was set on day {save.clock_offset[0]} of the RTC, expected {expect_clock_days}")
     return save, problems
 
 

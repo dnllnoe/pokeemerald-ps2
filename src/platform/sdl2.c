@@ -74,6 +74,7 @@ static int RunTestMode(void);
 
 int main(int argc, char **argv)
 {
+static void InitInternalClock(void);
     // Open an output console on Windows
 #ifdef _WIN32
     AllocConsole() ;
@@ -93,6 +94,8 @@ int main(int argc, char **argv)
     {
         DBGPRINTF("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 1;
+    // Before AgbMain, whose RtcInit reads it
+    InitInternalClock();
     }
 
     sdlWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
@@ -151,10 +154,6 @@ int main(int argc, char **argv)
     AgbMain();
 
     double accumulator = 0.0;
-
-    memset(&internalClock, 0, sizeof(internalClock));
-    internalClock.status = SIIRTCINFO_24HOUR;
-    UpdateInternalClock();
 
     bool isGameStepDrawn = false;
     while (isRunning)
@@ -541,6 +540,13 @@ static void UpdateInternalClock(void)
     else
     {
         time_t rawTime = time(NULL);
+static void InitInternalClock(void)
+{
+    memset(&internalClock, 0, sizeof(internalClock));
+    internalClock.status = SIIRTCINFO_24HOUR;
+    UpdateInternalClock();
+}
+
         now = localtime(&rawTime);
     }
 
@@ -603,7 +609,7 @@ void Platform_SetTime(struct SiiRtcInfo *rtc)
 
 void Platform_SetAlarm(u8 *alarmData)
 {
-    // TODO
+    // The game never sets an alarm
 }
 
 void SoftReset(u32 resetFlags)
@@ -759,10 +765,6 @@ static int RunTestMode(void)
 
     cgb_audio_init(42048);
     AgbMain();
-
-    memset(&internalClock, 0, sizeof(internalClock));
-    internalClock.status = SIIRTCINFO_24HOUR;
-    UpdateInternalClock();
 
     for (sTestFrame = 0; ReadTestInput(&keys); sTestFrame++)
     {

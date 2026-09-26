@@ -166,7 +166,9 @@ bool8 SiiRtcReset(void)
     sLocked = TRUE;
 
 #ifdef PORTABLE
-    // TODO
+    // The PC's clock can't be reset, and doesn't need to be: the game keeps the
+    // time the player sets as an offset from the RTC
+    sLocked = FALSE;
 #else
     GPIO_PORT_DATA = SCK_HI;
     GPIO_PORT_DATA = SCK_HI | CS_HI;
