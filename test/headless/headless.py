@@ -39,9 +39,10 @@ def load_scenario(scenario, **params):
 
 
 def scenario_variables(scenario, **params):
-    """Returns all of the variables a scenario sets, like load_scenario."""
+    """Returns all of the variables a scenario sets, like load_scenario. A
+    scenario can set CONFIG to a settings file in this directory to play with."""
     path = scenario if scenario.endswith(".py") else os.path.join(SCENARIO_DIR, scenario + ".py")
-    namespace = {"tap": tap, "wait": wait, "walk": walk, **params}
+    namespace = {"tap": tap, "wait": wait, "walk": walk, "load_scenario": load_scenario, "CONFIG": None, **params}
     with open(path) as f:
         exec(compile(f.read(), path, "exec"), namespace)
     return namespace
@@ -73,7 +74,8 @@ def run_scenario(binary, scenario, out_dir, save=None, shot_every=0, params=None
     """Runs a scenario and returns a Run. `save` is a save file to start from
     (it's copied, not modified). With `shot_every`, a PPM screenshot is written
     every that many frames, plus one of the last frame."""
-    steps = load_scenario(scenario, **(params or {}))
+    variables = scenario_variables(scenario, **(params or {}))
+    steps = variables["steps"]
     os.makedirs(out_dir, exist_ok=True)
     for old in glob.glob(os.path.join(out_dir, "frame_*.ppm")):
         os.remove(old)
@@ -91,6 +93,8 @@ def run_scenario(binary, scenario, out_dir, save=None, shot_every=0, params=None
 
     cmd = [os.path.abspath(binary), "--save", run.save_path, "--test-input", input_path,
            "--test-hashes", run.hashes_path]
+    if variables["CONFIG"]:
+        cmd += ["--config", os.path.join(TEST_DIR, variables["CONFIG"])]
     if shot_every:
         cmd += ["--test-shots", out_dir, "--test-shot-every", str(shot_every)]
     proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=timeout)

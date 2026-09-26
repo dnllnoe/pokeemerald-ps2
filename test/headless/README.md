@@ -16,8 +16,9 @@ Everything needs Python 3. The scripts work with any PC build (Linux or Windows)
 ## Checks
 
 `smoke.py BINARY` plays a new game up to the first save, continues that save and saves
-again, fights the first battle and saves with the starter, resets with A+B+START+SELECT
-and saves again, and plays with random buttons. Every run has to finish, and the saves
+again, fights the first battle and saves with the starter, fights it again with keys
+and controller inputs (default and remapped), resets with A+B+START+SELECT and saves
+again, and plays with random buttons. Every run has to finish, and the saves
 have to be valid GBA-format saves with the expected contents. After the reset, the game
 has to give the same frames as after power on. CI runs it on Linux and Windows for every
 push and pull request.
@@ -49,6 +50,11 @@ steps = wait(300) + tap("START")          # skip the intro
 steps += walk("UP", 3)                    # 16 frames per tile
 steps += tap("A", 10, hold=4, gap=26)     # press A 10 times
 ```
+
+Besides the GBA buttons, a step can press keys and controller inputs, which go through
+the bindings in the settings like when playing: `key:Z`, `pad:a`, `pad:lefty-` (the
+names are the settings file's). A scenario that sets `CONFIG` to a settings file in
+this directory plays with it (see `scenarios/controls.py`).
 
 They are timed to the frame, so a change to game timing can make one go off track. To
 write or fix one, take screenshots and look at them on a contact sheet (needs

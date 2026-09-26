@@ -7,7 +7,6 @@
 #ifdef _WIN32
 #define NOMINMAX // global.h has its own
 #include <windows.h>
-#include <xinput.h>
 #endif
 
 #include <SDL2/SDL.h>
@@ -21,6 +20,7 @@
 #include "gba/flash_internal.h"
 #include "platform/dma.h"
 #include "platform/framedraw.h"
+#include "platform/settings.h"
 #include "platform/system.h"
 
 extern void (*const gIntrTable[])(void);
@@ -45,6 +45,8 @@ struct SiiRtcInfo internalClock;
 
 static FILE *sSaveFile = NULL;
 static const char *sSavePath;
+static const char *sSettingsPath;
+static char *sDataDir;
 
 // Headless test mode, see RunTestMode()
 static bool sTestMode = false;
@@ -70,7 +72,8 @@ static void InitInternalClock(void);
 static void UpdateInternalClock(void);
 
 static bool ParseArgs(int argc, char **argv);
-static void FindSaveFile(void);
+static void FindDataFiles(void);
+static void ToggleFullscreen(void);
 static int RunTestMode(void);
 
 int main(int argc, char **argv)
@@ -85,8 +88,12 @@ int main(int argc, char **argv)
     if (!ParseArgs(argc, argv))
         return 1;
 
-    if (sSavePath == NULL)
-        FindSaveFile();
+    // The test mode only uses files it's given, apart from the save
+    if (!sTestMode)
+        FindDataFiles();
+    else if (sSavePath == NULL)
+        sSavePath = "pokeemerald.sav";
+    LoadSettings(sSettingsPath);
     ReadSaveFile(sSavePath);
     // Before AgbMain, whose RtcInit reads it
     InitInternalClock();
@@ -94,13 +101,30 @@ int main(int argc, char **argv)
     if (sTestMode)
         return RunTestMode();
 
-    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
+    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0)
     {
         DBGPRINTF("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 1;
     }
 
-    sdlWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    // Mappings for controllers SDL doesn't know, from https://github.com/mdqinc/SDL_GameControllerDB
+    {
+        char path[1024];
+        FILE *mappings;
+
+        snprintf(path, sizeof(path), "%sgamecontrollerdb.txt", sDataDir);
+        mappings = fopen(path, "r");
+        if (mappings != NULL)
+        {
+            fclose(mappings);
+            if (SDL_GameControllerAddMappingsFromFile(path) < 0)
+                fprintf(stderr, "Could not read %s: %s\n", path, SDL_GetError());
+        }
+    }
+
+    videoScale = gSettings.scale;
+    sdlWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale,
+                                 SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | (gSettings.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     if (sdlWindow == NULL)
     {
         DBGPRINTF("Window could not be created! SDL_Error: %s\n", SDL_GetError());
@@ -118,6 +142,8 @@ int main(int argc, char **argv)
     SDL_RenderClear(sdlRenderer);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     SDL_RenderSetLogicalSize(sdlRenderer, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    // Whole pixels only, with borders in fullscreen
+    SDL_RenderSetIntegerScale(sdlRenderer, SDL_TRUE);
 
     sdlTexture = SDL_CreateTexture(sdlRenderer,
                                    SDL_PIXELFORMAT_ABGR1555,
@@ -313,25 +339,8 @@ static void CloseSaveFile()
     }
 }
 
-// Key mappings
-#define KEY_A_BUTTON      SDLK_z
-#define KEY_B_BUTTON      SDLK_x
-#define KEY_START_BUTTON  SDLK_RETURN
-#define KEY_SELECT_BUTTON SDLK_BACKSLASH
-#define KEY_L_BUTTON      SDLK_a
-#define KEY_R_BUTTON      SDLK_s
-#define KEY_DPAD_UP       SDLK_UP
-#define KEY_DPAD_DOWN     SDLK_DOWN
-#define KEY_DPAD_LEFT     SDLK_LEFT
-#define KEY_DPAD_RIGHT    SDLK_RIGHT
-
-#define HANDLE_KEYUP(key) \
-case KEY_##key:  keys &= ~key; break;
-
-#define HANDLE_KEYDOWN(key) \
-case KEY_##key:  keys |= key; break;
-
-static u16 keys;
+// The GBA buttons in the headless test mode, from its input file
+static u16 sTestButtons;
 
 void ProcessEvents(void)
 {
@@ -344,43 +353,9 @@ void ProcessEvents(void)
         case SDL_QUIT:
             isRunning = false;
             break;
-        case SDL_KEYUP:
-            switch (event.key.keysym.sym)
-            {
-            HANDLE_KEYUP(A_BUTTON)
-            HANDLE_KEYUP(B_BUTTON)
-            HANDLE_KEYUP(START_BUTTON)
-            HANDLE_KEYUP(SELECT_BUTTON)
-            HANDLE_KEYUP(L_BUTTON)
-            HANDLE_KEYUP(R_BUTTON)
-            HANDLE_KEYUP(DPAD_UP)
-            HANDLE_KEYUP(DPAD_DOWN)
-            HANDLE_KEYUP(DPAD_LEFT)
-            HANDLE_KEYUP(DPAD_RIGHT)
-            case SDLK_SPACE:
-                if (speedUp)
-                {
-                    speedUp = false;
-                    timeScale = 1.0;
-                    //SDL_ClearQueuedAudio(1);
-                    //SDL_PauseAudio(0);
-                }
-                break;
-            }
-            break;
         case SDL_KEYDOWN:
             switch (event.key.keysym.sym)
             {
-            HANDLE_KEYDOWN(A_BUTTON)
-            HANDLE_KEYDOWN(B_BUTTON)
-            HANDLE_KEYDOWN(START_BUTTON)
-            HANDLE_KEYDOWN(SELECT_BUTTON)
-            HANDLE_KEYDOWN(L_BUTTON)
-            HANDLE_KEYDOWN(R_BUTTON)
-            HANDLE_KEYDOWN(DPAD_UP)
-            HANDLE_KEYDOWN(DPAD_DOWN)
-            HANDLE_KEYDOWN(DPAD_LEFT)
-            HANDLE_KEYDOWN(DPAD_RIGHT)
             case SDLK_r:
                 if (event.key.keysym.mod & (KMOD_LCTRL | KMOD_RCTRL))
                 {
@@ -393,18 +368,19 @@ void ProcessEvents(void)
                     paused = !paused;
                 }
                 break;
-            case SDLK_SPACE:
-                if (!speedUp)
-                {
-                    speedUp = true;
-                    timeScale = 5.0;
-                    //SDL_PauseAudio(1);
-                }
+            case SDLK_F11:
+                ToggleFullscreen();
                 break;
             }
             break;
+        case SDL_CONTROLLERDEVICEADDED:
+        case SDL_CONTROLLERDEVICEREMOVED:
+            Input_HandleEvent(&event);
+            break;
         case SDL_WINDOWEVENT:
-            if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+            // Keep the window a whole multiple of the GBA screen
+            if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED
+             && !(SDL_GetWindowFlags(sdlWindow) & SDL_WINDOW_FULLSCREEN))
             {
                 unsigned int w = event.window.data1;
                 unsigned int h = event.window.data2;
@@ -422,73 +398,24 @@ void ProcessEvents(void)
             break;
         }
     }
+
+    // Fast-forward while it's held
+    Input_GetButtons(&speedUp);
+    timeScale = speedUp ? 5.0 : 1.0;
 }
 
-#ifdef _WIN32
-#define STICK_THRESHOLD 0.5f
-u16 GetXInputKeys()
+static void ToggleFullscreen(void)
 {
-    XINPUT_STATE state;
-    ZeroMemory(&state, sizeof(XINPUT_STATE));
+    bool fullscreen = !(SDL_GetWindowFlags(sdlWindow) & SDL_WINDOW_FULLSCREEN);
 
-    DWORD dwResult = XInputGetState(0, &state);
-    u16 xinputKeys = 0;
-
-    if (dwResult == ERROR_SUCCESS)
-    {
-        /* A */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) >> 12;
-        /* B */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_X) >> 13;
-        /* Start */  xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_START) >> 1;
-        /* Select */ xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK) >> 3;
-        /* L */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) << 1;
-        /* R */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) >> 1;
-        /* Up */     xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP) << 6;
-        /* Down */   xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) << 6;
-        /* Left */   xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) << 3;
-        /* Right */  xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) << 1;
-
-
-        /* Control Stick */
-        float xAxis = (float)state.Gamepad.sThumbLX / (float)SHRT_MAX;
-        float yAxis = (float)state.Gamepad.sThumbLY / (float)SHRT_MAX;
-
-        if (xAxis < -STICK_THRESHOLD) xinputKeys |= DPAD_LEFT;
-        if (xAxis >  STICK_THRESHOLD) xinputKeys |= DPAD_RIGHT;
-        if (yAxis < -STICK_THRESHOLD) xinputKeys |= DPAD_DOWN;
-        if (yAxis >  STICK_THRESHOLD) xinputKeys |= DPAD_UP;
-
-
-        /* Speedup */
-        // Note: 'speedup' variable is only (un)set on keyboard input
-        double oldTimeScale = timeScale;
-        timeScale = (state.Gamepad.bRightTrigger > 0x80 || speedUp) ? 5.0 : 1.0;
-
-        if (oldTimeScale != timeScale)
-        {
-            if (timeScale > 1.0)
-            {
-                SDL_PauseAudio(1);
-            }
-            else
-            {
-                SDL_ClearQueuedAudio(1);
-                SDL_PauseAudio(0);
-            }
-        }
-    }
-
-    return xinputKeys;
+    SDL_SetWindowFullscreen(sdlWindow, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 }
-#endif // _WIN32
 
 u16 Platform_GetKeyInput(void)
 {
-#ifdef _WIN32
-    u16 gamepadKeys = GetXInputKeys();
-    return (gamepadKeys != 0) ? gamepadKeys : keys;
-#endif
-
-    return keys;
+    if (sTestMode)
+        return sTestButtons;
+    return Input_GetButtons(NULL);
 }
 
 void VDraw(SDL_Texture *texture)
@@ -640,6 +567,10 @@ static bool ParseArgs(int argc, char **argv)
         {
             sSavePath = value;
         }
+        else if (strcmp(arg, "--config") == 0)
+        {
+            sSettingsPath = value;
+        }
         else if (strcmp(arg, "--test-input") == 0)
         {
             sTestMode = true;
@@ -679,30 +610,38 @@ static bool ParseArgs(int argc, char **argv)
     return true;
 }
 
-// The save goes in the user's data folder, unless there's one in the current
-// directory, where earlier versions kept it. The test mode uses the current
-// directory's, or the one it's given.
-static void FindSaveFile(void)
+// The save and the settings go in the user's data folder, unless there's a save
+// in the current directory, where earlier versions kept it
+static void FindDataFiles(void)
 {
-    static char path[1024];
-    char *dataDir = NULL;
+    static char savePath[1024], settingsPath[1024];
     FILE *oldSave = fopen("pokeemerald.sav", "rb");
 
     if (oldSave != NULL)
         fclose(oldSave);
-    else if (!sTestMode)
-        dataDir = SDL_GetPrefPath("", "pokeemerald");
+    else
+        sDataDir = SDL_GetPrefPath("", "pokeemerald");
+    if (sDataDir == NULL)
+        sDataDir = SDL_strdup("");
 
-    snprintf(path, sizeof(path), "%spokeemerald.sav", dataDir != NULL ? dataDir : "");
-    sSavePath = path;
-    SDL_free(dataDir);
-    if (!sTestMode)
-        printf("Save file: %s\n", sSavePath);
+    if (sSavePath == NULL)
+    {
+        snprintf(savePath, sizeof(savePath), "%spokeemerald.sav", sDataDir);
+        sSavePath = savePath;
+    }
+    if (sSettingsPath == NULL)
+    {
+        snprintf(settingsPath, sizeof(settingsPath), "%spokeemerald.ini", sDataDir);
+        sSettingsPath = settingsPath;
+    }
+    printf("Save file: %s\nSettings: %s\n", sSavePath, sSettingsPath);
 }
 
 // Reads the keys to hold for the next frame from the test input. Each line is
 // "<frames> <buttons>", where buttons is "-" or names joined by '+', e.g.
-// "30 A+UP". Lines starting with '#' are ignored. Returns false at the end.
+// "30 A+UP". Besides the GBA buttons, names can be keys and controller inputs,
+// which go through the bindings in the settings, like "key:Z" or "pad:lefty-".
+// Lines starting with '#' are ignored. Returns false at the end.
 static bool ReadTestInput(u16 *outKeys)
 {
     static const struct { const char *name; u16 key; } sButtons[] = {
@@ -727,11 +666,12 @@ static bool ReadTestInput(u16 *outKeys)
         }
 
         sHoldKeys = 0;
+        Input_ReleaseTestInputs();
         for (char *name = strtok(buttons, "+"); name != NULL; name = strtok(NULL, "+"))
         {
             size_t i;
 
-            if (strcmp(name, "-") == 0)
+            if (strcmp(name, "-") == 0 || Input_PressTestInput(name))
                 continue;
             for (i = 0; i < ARRAY_COUNT(sButtons); i++)
             {
@@ -747,7 +687,7 @@ static bool ReadTestInput(u16 *outKeys)
     }
 
     sHoldFrames--;
-    *outKeys = sHoldKeys;
+    *outKeys = sHoldKeys | Input_GetTestButtons();
     return true;
 }
 
@@ -789,7 +729,7 @@ static int RunTestMode(void)
     cgb_audio_init(AUDIO_SAMPLE_RATE);
     AgbMain();
 
-    for (sTestFrame = 0; ReadTestInput(&keys); sTestFrame++)
+    for (sTestFrame = 0; ReadTestInput(&sTestButtons); sTestFrame++)
     {
         bool ranFrame;
 

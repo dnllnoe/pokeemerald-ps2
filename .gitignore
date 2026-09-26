@@ -49,4 +49,7 @@ prefabs.json
 # PC builds
 /pokeemerald32
 /pokeemerald64
+# Settings, when the game is run from here next to a pokeemerald.sav
+/pokeemerald.ini
+/gamecontrollerdb.txt
 __pycache__/

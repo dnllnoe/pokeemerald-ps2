@@ -6,12 +6,15 @@
 2. continue_game: continues that save, plays on and saves again.
 3. first_battle: continues that save, fights the first battle and saves with
    the starter in the party.
-4. soft_reset: continues that save, walks away and resets with
+4. controls: first_battle again, played with keys and controller inputs,
+   first with the default bindings and then with remapped ones. Both have to
+   give the same frames as first_battle.
+5. soft_reset: continues the first_battle save, walks away and resets with
    A+B+START+SELECT. After the reset, the same input has to give the same
    frames as after power on, and saving has to put the player back where the
    game was saved.
-5. random_play: continues the first_battle save and presses random buttons.
-6. With --audit, audit_data.py (needs gdb and a build with debug info).
+6. random_play: continues the first_battle save and presses random buttons.
+7. With --audit, audit_data.py (needs gdb and a build with debug info).
 
 Every run must exit normally after all of its frames, and give the frames in
 expected_frames.txt. When a change is meant to change them, --update-expected
@@ -124,6 +127,13 @@ def main():
             if check_run("first_battle", battle):
                 check_save("first_battle", battle.save_path, expect_counter=3, expect_name="AAAAAAA",
                            expect_money=3000, expect_map="1.4", expect_party=1)
+
+                for remapped in (False, True):
+                    name = "controls_remapped" if remapped else "controls"
+                    controls = run_scenario(args.binary, "controls", os.path.join(args.out, name),
+                                            save=continued.save_path, params={"REMAPPED": remapped})
+                    if check_run(name, controls, check_frames=False):
+                        check(controls.hashes() == battle.hashes(), f"{name} gives the same frames as first_battle")
 
                 reset = run_scenario(args.binary, "soft_reset", os.path.join(args.out, "soft_reset"),
                                      save=battle.save_path)
