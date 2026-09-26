@@ -65,7 +65,7 @@ jobs:
           cp SDL2/x86_64-w64-mingw32/bin/SDL2.dll .
 
       - name: Upload Windows (64-bit) build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows64
           path: |
@@ -88,7 +88,7 @@ jobs:
 
       - name: Upload headless test output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: headless-linux64
           path: build/headless
@@ -170,7 +170,7 @@ jobs:
 
       - name: Upload headless test output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: headless-sanitizers
           path: build/headless
@@ -183,7 +183,7 @@ jobs:
         uses: actions/checkout@master
 
       - name: Download Windows (64-bit) build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: windows64
 
@@ -192,7 +192,7 @@ jobs:
 
       - name: Download Linux test output
         if: always()
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: headless-linux64
           path: build/headless-linux
@@ -221,7 +221,7 @@ jobs:
 
       - name: Upload headless test output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: headless-windows64
           path: build/headless
