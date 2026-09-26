@@ -181,6 +181,37 @@ jobs:
           name: headless-sanitizers
           path: build/headless
 
+  # Apple Silicon, with clang. The game's data is assembled by GNU as and
+  # converted to Mach-O objects (tools/elf2macho).
+  macos:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Install tools and libraries
+        run: brew install make pkg-config libpng sdl2 x86_64-elf-binutils
+
+      - name: macOS (arm64)
+        run: gmake -j$(sysctl -n hw.ncpu) macos WERROR=1
+
+      - name: Upload macOS (arm64) build
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-arm64
+          path: pokeemerald64
+
+      # The frames have to match the expected ones from Linux exactly
+      - name: Headless tests (macOS arm64)
+        run: python3 test/headless/smoke.py ./pokeemerald64 --out build/headless
+
+      - name: Upload headless test output
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: headless-macos-arm64
+          path: build/headless
+
   windows-test:
     needs: build
     runs-on: windows-latest

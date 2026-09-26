@@ -49,6 +49,24 @@ To build 32 bit version add `IS64BIT=0` to the end of the command above (32 bit 
 
 You should get an executable named `pokeemerald(64 or 32)`
 
+To build with clang instead of gcc, add `COMPILER=clang`.
+
+## macOS
+
+Install the Xcode command line tools with `xcode-select --install`, and [Homebrew](https://brew.sh). Then install the other tools and libraries:
+```
+brew install make pkg-config libpng sdl2 x86_64-elf-binutils
+```
+
+The game's data is assembled with the GNU assembler from `x86_64-elf-binutils`, because clang's assembler can't build it. Homebrew's `make` is a newer GNU make than the one macOS has, and it's run as `gmake`.
+
+Build the macOS version with:
+```
+gmake macos -j$(sysctl -n hw.ncpu)
+```
+
+You should get an executable named `pokeemerald64`, which uses Homebrew's SDL2.
+
 ## GBA
 
 Follow instructions in [INSTALL.md](INSTALL.md)

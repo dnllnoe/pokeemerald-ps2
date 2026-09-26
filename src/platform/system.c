@@ -39,8 +39,8 @@ void RunDMAsAndVBlank(void)
 	REG_DISPSTAT &= ~INTR_FLAG_VBLANK;
 }
 
-// All of the game's variables start out zeroed, and the Makefile moves them to
-// a section of their own, gba_ram, which stands in for the GBA's EWRAM and IWRAM
+// All of the game's variables start out zeroed, and the build moves them to a
+// section of their own, gba_ram, which stands in for the GBA's EWRAM and IWRAM
 static void GetGameRam(u8 **start, size_t *size)
 {
 #ifdef _WIN32
@@ -58,6 +58,13 @@ static void GetGameRam(u8 **start, size_t *size)
 			*size = section->Misc.VirtualSize;
 		}
 	}
+#elif defined(__APPLE__)
+	// The linker's names for where a Mach-O section starts and ends
+	extern u8 gbaRamStart[] __asm("section$start$__DATA$__gba_ram");
+	extern u8 gbaRamEnd[] __asm("section$end$__DATA$__gba_ram");
+
+	*start = gbaRamStart;
+	*size = gbaRamEnd - gbaRamStart;
 #else
 	extern u8 __start_gba_ram[], __stop_gba_ram[];
 

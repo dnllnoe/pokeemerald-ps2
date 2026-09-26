@@ -36,8 +36,8 @@
 #define asm __asm__
 #endif
 
-/// IDE support
-#if defined(__APPLE__) || defined(__CYGWIN__) || defined(__INTELLISENSE__)
+/// IDE support (not for the PC port, which is compiled on macOS)
+#if (!defined(PORTABLE) && (defined(__APPLE__) || defined(__CYGWIN__))) || defined(__INTELLISENSE__)
 // We define these when using certain IDEs to fool preproc
 #define _(x)        {x}
 #define __(x)       {x}
