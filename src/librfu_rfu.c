@@ -599,10 +599,10 @@ static void rfu_CB_pollAndEndSearchChild(u8 reqCommand, u16 reqResult)
 
 static void rfu_STC_readChildList(void)
 {
-    u32 stwiParam;
+    u32 UNUSED stwiParam;
     u8 numSlots = gRfuFixed->STWIBuffer->rxPacketAlloc.rfuPacket8.data[1];
     u8 *data_p;
-    u8 i;
+    u8 UNUSED i;
     u8 bm_slot_id;
 #if LIBRFU_VERSION < 1026
     u8 true_slots[RFU_CHILD_MAX];

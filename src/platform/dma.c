@@ -9,7 +9,7 @@ struct DMATransfer {
         const u32 *src32;
     };
     union {
-        void *dst;
+        volatile void *dst;
         vu16 *dst16;
         vu32 *dst32;
     };
@@ -91,7 +91,7 @@ void RunDMAs(u32 type)
     }
 }
 
-void DmaSet(int dmaNum, const void *src, void *dest, u32 control)
+void DmaSet(int dmaNum, const void *src, volatile void *dest, u32 control)
 {
     if (dmaNum >= DMA_COUNT)
     {

@@ -213,7 +213,6 @@ static void RenderRotScaleBGScanline(int bgNum, uint16_t control, uint16_t x, ui
     vBgCnt *bgcnt = (vBgCnt *)&control;
     unsigned int charBaseBlock = bgcnt->charBaseBlock;
     unsigned int screenBaseBlock = bgcnt->screenBaseBlock;
-    unsigned int mapWidth = 1 << (4 + (bgcnt->screenSize)); // number of tiles
 
     uint8_t *bgtiles = (uint8_t *)(VRAM_ + charBaseBlock * 0x4000);
     uint8_t *bgmap = (uint8_t *)(VRAM_ + screenBaseBlock * 0x800);
@@ -454,8 +453,6 @@ static bool winCheckHorizontalBounds(u16 left, u16 right, u16 xpos)
 static void DrawSprites(struct scanlineData* scanline, uint16_t vcount, bool windowsEnabled)
 {
     int i;
-    unsigned int x;
-    unsigned int y;
     void *objtiles = VRAM_ + 0x10000;
     unsigned int blendMode = (REG_BLDCNT >> 6) & 3;
     bool winShouldBlendPixel = true;
@@ -504,9 +501,6 @@ static void DrawSprites(struct scanlineData* scanline, uint16_t vcount, bool win
             continue; // prohibited, do not draw
         }
 
-        int rect_width = width;
-        int rect_height = height;
-
         int half_width = width / 2;
         int half_height = height / 2;
 
@@ -537,8 +531,6 @@ static void DrawSprites(struct scanlineData* scanline, uint16_t vcount, bool win
 
             if (doubleSizeOrDisabled) // double size for affine
             {
-                rect_width *= 2;
-                rect_height *= 2;
                 half_width *= 2;
                 half_height *= 2;
             }
@@ -559,8 +551,6 @@ static void DrawSprites(struct scanlineData* scanline, uint16_t vcount, bool win
         if (vcount >= (y - half_height) && vcount < (y + half_height))
         {
             int local_y = (oam->mosaic == 1) ? applySpriteVerticalMosaicEffect(vcount) - y : vcount - y;
-            int number  = oam->tileNum;
-            int palette = oam->paletteNum;
             bool flipX  = !isAffine && ((oam->matrixNum >> 3) & 1);
             bool flipY  = !isAffine && ((oam->matrixNum >> 4) & 1);
             bool is8BPP  = oam->bpp & 1;
@@ -891,7 +881,6 @@ uint16_t *memsetu16(uint16_t *dst, uint16_t fill, size_t count)
 void DrawFrame(uint16_t *pixels)
 {
     int i;
-    int j;
 
     for (i = 0; i < DISPLAY_HEIGHT; i++)
     {

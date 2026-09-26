@@ -445,7 +445,7 @@ static void Task_HandleShopMenuQuit(u8 taskId)
 
 static void Task_GoToBuyOrSellMenu(u8 taskId)
 {
-    s16 *data = gTasks[taskId].data;
+    s16 UNUSED *data = gTasks[taskId].data;
     if (!gPaletteFade.active)
     {
         DestroyTask(taskId);

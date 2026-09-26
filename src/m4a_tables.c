@@ -290,6 +290,7 @@ const u8 gClockTable[] =
 #define BENDR  0xc1
 #define LFOS   0xc2
 #define LFODL  0xc3
+#undef MOD
 #define MOD    0xc4
 #define MODT   0xc5
 #define TUNE   0xc8

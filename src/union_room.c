@@ -203,7 +203,7 @@ static EWRAM_DATA union
     struct WirelessLink_Group *group;
     struct WirelessLink_URoom *uRoom;
 } sWirelessLinkMain = {};
-static EWRAM_DATA u32 sUnused = 0;
+static EWRAM_DATA u32 UNUSED sUnused = 0;
 EWRAM_DATA struct RfuGameCompatibilityData gRfuPartnerCompatibilityData = {};
 EWRAM_DATA u16 gUnionRoomOfferedSpecies = 0;
 EWRAM_DATA u8 gUnionRoomRequestedMonType = 0;
@@ -3375,6 +3375,10 @@ static void Task_InitUnionRoom(u8 taskId)
         DestroyTask(taskId);
         break;
     }
+}
+#else
+static void Task_InitUnionRoom(u8 taskId)
+{
 }
 #endif
 

@@ -3115,7 +3115,7 @@ static void DrawKeyboardWindow(void)
 static void LoadTextEntryWindow(void)
 {
     int i;
-    u8 unused[2];
+    u8 UNUSED unused[2];
     unused[0] = 0;
     unused[1] = 0xFF;
 

@@ -82,7 +82,7 @@ vu16 GPIOPortDirection;
 extern vu16 GPIOPortDirection;
 #endif
 
-static u16 sDummy; // unused variable
+static u16 UNUSED sDummy; // unused variable
 static bool8 sLocked;
 
 static int WriteCommand(u8 value);
@@ -190,7 +190,7 @@ bool8 SiiRtcReset(void)
 
 bool8 SiiRtcGetStatus(struct SiiRtcInfo *rtc)
 {
-    u8 statusData;
+    u8 UNUSED statusData;
 
     if (sLocked == TRUE)
         return FALSE;
@@ -225,7 +225,7 @@ bool8 SiiRtcGetStatus(struct SiiRtcInfo *rtc)
 
 bool8 SiiRtcSetStatus(struct SiiRtcInfo *rtc)
 {
-    u8 statusData;
+    u8 UNUSED statusData;
 
     if (sLocked == TRUE)
         return FALSE;
@@ -258,7 +258,7 @@ bool8 SiiRtcSetStatus(struct SiiRtcInfo *rtc)
 
 bool8 SiiRtcGetDateTime(struct SiiRtcInfo *rtc)
 {
-    u8 i;
+    u8 UNUSED i;
 
     if (sLocked == TRUE)
         return FALSE;
@@ -291,7 +291,7 @@ bool8 SiiRtcGetDateTime(struct SiiRtcInfo *rtc)
 
 bool8 SiiRtcSetDateTime(struct SiiRtcInfo *rtc)
 {
-    u8 i;
+    u8 UNUSED i;
 
     if (sLocked == TRUE)
         return FALSE;
@@ -320,7 +320,7 @@ bool8 SiiRtcSetDateTime(struct SiiRtcInfo *rtc)
 
 bool8 SiiRtcGetTime(struct SiiRtcInfo *rtc)
 {
-    u8 i;
+    u8 UNUSED i;
 
     if (sLocked == TRUE)
         return FALSE;
@@ -354,7 +354,7 @@ bool8 SiiRtcGetTime(struct SiiRtcInfo *rtc)
 
 bool8 SiiRtcSetTime(struct SiiRtcInfo *rtc)
 {
-    u8 i;
+    u8 UNUSED i;
 
     if (sLocked == TRUE)
         return FALSE;
@@ -383,7 +383,7 @@ bool8 SiiRtcSetTime(struct SiiRtcInfo *rtc)
 
 static bool8 UNUSED SiiRtcSetAlarm(struct SiiRtcInfo *rtc)
 {
-    u8 i;
+    u8 UNUSED i;
     u8 alarmData[2];
 
     if (sLocked == TRUE)

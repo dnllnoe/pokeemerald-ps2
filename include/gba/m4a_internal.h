@@ -453,7 +453,7 @@ void MPlayMain(struct MusicPlayerInfo *);
 void RealClearChain(void *x);
 #else
 void SoundMainBTM(void *ptr);
-void TrackStop(struct MP2KPlayerState *player, struct MP2KTrack *track);
+void TrackStop(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track);
 void MPlayMain(struct MusicPlayerInfo *);
 void MP2KClearChain(struct MixerSource *chan);
 #endif
@@ -475,11 +475,7 @@ void CgbOscOff(u8);
 void CgbModVol(struct CgbChannel *chan);
 u32 MidiKeyToCgbFreq(u8, u8, u8);
 void DummyFunc(void);
-#ifndef PORTABLE
 void MPlayJumpTableCopy(MPlayFunc *mplayJumpTable);
-#else
-void MPlayJumpTableCopy(void **mplayJumpTable);
-#endif
 void SampleFreqSet(u32 freq);
 void m4aSoundVSyncOn(void);
 void m4aSoundVSyncOff(void);

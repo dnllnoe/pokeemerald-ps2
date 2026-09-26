@@ -1561,7 +1561,7 @@ static void CreateWaterPulseRingBubbles(struct Sprite *sprite, int xDiff, int yD
     s16 combinedY;
     s16 i;
     s16 something;
-    s16 unusedVar = 1; //unusedVar is needed to match
+    s16 UNUSED unusedVar = 1; //unusedVar is needed to match
     s16 randomSomethingY;
     s16 randomSomethingX;
     u8 spriteId;

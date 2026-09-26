@@ -3,7 +3,7 @@
 #include "multiboot.h"
 #include "gba/io_reg.h"
 
-static u16 MultiBoot_required_data[MULTIBOOT_NCHILD];
+static u16 UNUSED MultiBoot_required_data[MULTIBOOT_NCHILD];
 #ifndef PORTABLE
 
 static int MultiBootSend(struct MultiBootParam *mp, u16 data);

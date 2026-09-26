@@ -257,7 +257,15 @@ else ifeq ($(PORTABLE),1)
   PATH_MODERNCC := PATH="$(PATH)" $(MODERNCC)
   CPP := $(PREFIX)cpp -m$(BIT_WIDTH)
   CC1 	:= $(shell $(PREFIX)gcc --print-prog-name=cc1) -quiet
-  override CFLAGS += $(OS_CFLAGS) $(PLATFORM_CFLAGS) -Werror=implicit-function-declaration -Wno-error=incompatible-pointer-types -Werror=int-conversion -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast -Wno-trigraphs -Wimplicit -Wparentheses -Wunused -m$(BIT_WIDTH) -std=gnu99 $(LEADING_UNDERSCORE_FLAG) -fno-dce -fno-builtin -Wno-unused-function -DPORTABLE -DNONMATCHING -D UBFIX -DMODERN=$(MODERN)
+  override CFLAGS += $(OS_CFLAGS) $(PLATFORM_CFLAGS) -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=int-conversion -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast -Wno-trigraphs -Wimplicit -Wparentheses -Wunused -m$(BIT_WIDTH) -std=gnu99 $(LEADING_UNDERSCORE_FLAG) -fno-dce -fno-builtin -Wno-unused-function -DPORTABLE -DNONMATCHING -D UBFIX -DMODERN=$(MODERN)
+  # GCC reports writes it can't rule out on paths the game never takes, like
+  # GetMonData filling in a name with no buffer to write to, and which ones it
+  # reports changes between versions
+  override CFLAGS += -Wno-stringop-overflow
+  # CI builds with WERROR=1, so that new warnings fail the build
+  ifeq ($(WERROR),1)
+    override CFLAGS += -Werror
+  endif
   LIB := $(LIBPATH) -lgcc -lc
 else
   # Note: The makefile must be set up to not call these if modern == 0
