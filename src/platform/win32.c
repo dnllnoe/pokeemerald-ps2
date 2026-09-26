@@ -50,8 +50,6 @@ bool drawingEnabled = true;
 static HANDLE sSaveFile = NULL;
 
 extern void AgbMain(void);
-extern void MainLoop(void);
-extern void DoSoftReset(void);
 
 DWORD WINAPI DoMain(LPVOID lpParam);
 void VDraw();
@@ -255,7 +253,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
             break;
         case IDM_RESETGAME:
-            DoSoftReset();
+            RequestSoftReset();
             break;
         case IDM_PAUSEGAME:
             if (!paused){
@@ -418,6 +416,12 @@ int main(int argc, char **argv)
     int nCmdShow = 1;
     DBGPRINTF("Game launch main()\n");
     ReadSaveFile(savePath);
+
+    // Before AgbMain, whose RtcInit reads it
+    memset(&internalClock, 0, sizeof(internalClock));
+    internalClock.status = SIIRTCINFO_24HOUR;
+    UpdateInternalClock();
+    DBGPRINTF("Clock init done!\n");
     MyRegisterClass(hInstance);
 
     // Perform application initialization:
@@ -438,18 +442,12 @@ int main(int argc, char **argv)
 
     DBGPRINTF("Event Init done!\n");
 
-    cgb_audio_init(42048);
+    cgb_audio_init(AUDIO_SAMPLE_RATE);
     DBGPRINTF("cgb_audio_init Init done!\n");
     
     AgbMain();
 
     double accumulator = 0.0;
-
-    memset(&internalClock, 0, sizeof(internalClock));
-    internalClock.status = SIIRTCINFO_24HOUR;
-    UpdateInternalClock();
-
-    DBGPRINTF("Clock init done!\n");
 
     unsigned int fpsseconds = GetTickCount()+1000;
     bool isGameStepDrawn = false;
@@ -483,7 +481,12 @@ int main(int argc, char **argv)
 			{
 				//run game logic, draw frame and process DMAs and vblank
 				ENTER_VBLANK(); //you must be in VBlank before running a game tick
-				MainLoop();
+				if (!RunMainLoop())
+				{
+					// After a soft reset, the next frame starts with MainLoop, like at startup
+					accumulator -= fixedTimestep;
+					continue;
+				}
 				if (!isGameStepDrawn)
 				{
 					VDraw();
@@ -741,8 +744,8 @@ static void UpdateInternalClock(void)
     SYSTEMTIME time;
     GetLocalTime(&time);
 
-    internalClock.year = BinToBcd(time.wYear - 100);
-    internalClock.month = BinToBcd(time.wMonth-1) + 1;
+    internalClock.year = BinToBcd(time.wYear - 2000);
+    internalClock.month = BinToBcd(time.wMonth);
     internalClock.day = BinToBcd(time.wDay);
     internalClock.dayOfWeek = BinToBcd(time.wDayOfWeek);
     internalClock.hour = BinToBcd(time.wHour);
@@ -800,13 +803,7 @@ void Platform_SetTime(struct SiiRtcInfo *rtc)
 
 void Platform_SetAlarm(u8 *alarmData)
 {
-    // TODO
-}
-
-void SoftReset(u32 resetFlags)
-{
-    puts("Soft Reset called. Exiting.");
-    ExitProcess(0);
+    // The game never sets an alarm
 }
 
 #endif

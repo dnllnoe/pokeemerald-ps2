@@ -1,12 +1,11 @@
 #ifdef PLATFORM_SDL2
 #include <assert.h>
-#include <setjmp.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
 
-#define NOMINMAX // global.h has its own
 #ifdef _WIN32
+#define NOMINMAX // global.h has its own
 #include <windows.h>
 #include <xinput.h>
 #endif
@@ -57,15 +56,7 @@ static time_t sTestClockBase = 1767268800; // 2026-01-01 12:00:00 UTC
 static u32 sTestFrame;
 static u64 sTestAudioHash;
 
-// Soft reset, see SoftReset()
-static jmp_buf sSoftResetJump;
-static bool sInMainLoop;
-static bool sSoftResetRequested;
-
 extern void AgbMain(void);
-extern void MainLoop(void);
-extern void DoSoftReset(void);
-extern bool8 gSoftResetDisabled;
 
 int DoMain(void *param);
 void ProcessEvents(void);
@@ -80,7 +71,6 @@ static void UpdateInternalClock(void);
 
 static bool ParseArgs(int argc, char **argv);
 static int RunTestMode(void);
-static bool RunMainLoop(void);
 
 int main(int argc, char **argv)
 {
@@ -144,7 +134,7 @@ int main(int argc, char **argv)
     SDL_AudioSpec want;
 
     SDL_memset(&want, 0, sizeof(want)); /* or SDL_zero(want) */
-    want.freq = 42048;
+    want.freq = AUDIO_SAMPLE_RATE;
     want.format = AUDIO_F32;
     want.channels = 2;
     want.samples = 1024;
@@ -187,7 +177,8 @@ int main(int argc, char **argv)
                 ENTER_VBLANK(); //you must be in VBlank before running a game tick
                 if (!RunMainLoop())
                 {
-                    // After a soft reset, the next frame starts with MainLoop, like at startup
+                    // Soft reset: drop the old sound, and start the next frame with MainLoop
+                    SDL_ClearQueuedAudio(1);
                     accumulator -= fixedTimestep;
                     continue;
                 }
@@ -390,7 +381,7 @@ void ProcessEvents(void)
             case SDLK_r:
                 if (event.key.keysym.mod & (KMOD_LCTRL | KMOD_RCTRL))
                 {
-                    sSoftResetRequested = true;
+                    RequestSoftReset();
                 }
                 break;
             case SDLK_p:
@@ -626,46 +617,6 @@ void Platform_SetAlarm(u8 *alarmData)
     // The game never sets an alarm
 }
 
-// On the GBA, SoftReset clears the RAM and starts the ROM over. Here it clears
-// the game's memory and jumps back to RunMainLoop, which starts the game over
-// with AgbMain. The save flash and the clock keep their state, as on the GBA.
-void SoftReset(u32 resetFlags)
-{
-    if (!sInMainLoop)
-    {
-        fputs("SoftReset was called outside of MainLoop\n", stderr);
-        exit(1);
-    }
-    RegisterRamReset(resetFlags);
-    longjmp(sSoftResetJump, 1);
-}
-
-// Runs a frame of the game and returns true, or if the game did a soft reset,
-// starts it over with AgbMain and returns false
-static bool RunMainLoop(void)
-{
-    if (setjmp(sSoftResetJump) != 0)
-    {
-        sInMainLoop = false;
-        if (!sTestMode)
-            SDL_ClearQueuedAudio(1);
-        cgb_audio_init(42048);
-        AgbMain();
-        return false;
-    }
-
-    sInMainLoop = true;
-    // Ctrl+R, which waits while the game doesn't allow resets, like when it saves
-    if (sSoftResetRequested && !gSoftResetDisabled)
-    {
-        sSoftResetRequested = false;
-        DoSoftReset();
-    }
-    MainLoop();
-    sInMainLoop = false;
-    return true;
-}
-
 // All options take a value. Anything else is ignored, like before there were
 // options, so e.g. a file dropped onto the executable doesn't stop the game.
 static bool ParseArgs(int argc, char **argv)
@@ -811,7 +762,7 @@ static int RunTestMode(void)
 {
     static uint16_t image[DISPLAY_WIDTH * DISPLAY_HEIGHT];
 
-    cgb_audio_init(42048);
+    cgb_audio_init(AUDIO_SAMPLE_RATE);
     AgbMain();
 
     for (sTestFrame = 0; ReadTestInput(&keys); sTestFrame++)

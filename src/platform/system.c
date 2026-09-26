@@ -3,10 +3,14 @@
 #define NOMINMAX // global.h has its own
 #include <windows.h>
 #endif
+#include <setjmp.h>
 #include <stdlib.h>
 #include "global.h"
+#include "main.h"
 #include "platform/dma.h"
+#include "platform/system.h"
 #include "m4a.h"
+#include "cgb_audio.h"
 
 u16 INTR_CHECK;
 void *INTR_VECTOR;
@@ -17,7 +21,12 @@ unsigned char OAM[OAM_SIZE] __attribute__ ((aligned (4)));
 unsigned char FLASH_BASE[131072] __attribute__ ((aligned (4)));
 struct SoundInfo *SOUND_INFO_PTR;
 
-extern void (*const gIntrTable[])(void);
+extern void MainLoop(void);
+
+// Soft reset, see SoftReset()
+static jmp_buf sSoftResetJump;
+static bool8 sInMainLoop;
+static bool8 sSoftResetRequested;
 
 void RunDMAsAndVBlank(void)
 {
@@ -91,6 +100,51 @@ void RegisterRamReset(u32 resetFlags)
 	// The game always resets all of the registers together
 	if (resetFlags & (RESET_SIO_REGS | RESET_SOUND_REGS | RESET_REGS))
 		memset(REG_BASE, 0, sizeof(REG_BASE));
+}
+
+// On the GBA, SoftReset clears the RAM and starts the ROM over. Here it clears
+// the game's memory and jumps back to RunMainLoop, which starts the game over
+// with AgbMain. The save flash and the clock keep their state, as on the GBA.
+void SoftReset(u32 resetFlags)
+{
+	if (!sInMainLoop)
+	{
+		fputs("SoftReset was called outside of MainLoop\n", stderr);
+		exit(1);
+	}
+	RegisterRamReset(resetFlags);
+	longjmp(sSoftResetJump, 1);
+}
+
+// For a reset from the platform's controls. Like holding A+B+START+SELECT, it
+// waits while the game doesn't allow resets, like when it saves.
+void RequestSoftReset(void)
+{
+	sSoftResetRequested = TRUE;
+}
+
+// Runs a frame of the game and returns TRUE, or if the game did a soft reset,
+// starts it over with AgbMain and returns FALSE. Like at startup, the next
+// frame then starts with MainLoop.
+bool8 RunMainLoop(void)
+{
+	if (setjmp(sSoftResetJump) != 0)
+	{
+		sInMainLoop = FALSE;
+		cgb_audio_init(AUDIO_SAMPLE_RATE);
+		AgbMain();
+		return FALSE;
+	}
+
+	sInMainLoop = TRUE;
+	if (sSoftResetRequested && !gSoftResetDisabled)
+	{
+		sSoftResetRequested = FALSE;
+		DoSoftReset();
+	}
+	MainLoop();
+	sInMainLoop = FALSE;
+	return TRUE;
 }
 
 void AudioUpdate(void)
