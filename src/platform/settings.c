@@ -1,4 +1,3 @@
-#ifdef PLATFORM_SDL2
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -417,4 +416,3 @@ u16 Input_GetTestButtons(void)
 {
     return BindingsHeld(sTestKeyboard, &sTestPad, 1) & KEYS_MASK;
 }
-#endif // PLATFORM_SDL2

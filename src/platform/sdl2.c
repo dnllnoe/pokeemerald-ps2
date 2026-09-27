@@ -1,4 +1,3 @@
-#ifdef PLATFORM_SDL2
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -842,4 +841,3 @@ static int RunTestMode(void)
     return 0;
 }
 
-#endif
