@@ -1,3 +1,4 @@
+#ifdef PORTABLE
 #include "global.h"
 #include <stdbool.h>
 #include "platform/dma.h"
@@ -905,3 +906,4 @@ void DrawFrame(uint16_t *pixels)
         REG_DISPSTAT &= ~INTR_FLAG_VCOUNT;
     }
 }
+#endif // PORTABLE

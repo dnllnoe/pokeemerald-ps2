@@ -1,3 +1,4 @@
+#ifdef PORTABLE
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -840,4 +841,4 @@ static int RunTestMode(void)
     CloseSaveFile();
     return 0;
 }
-
+#endif // PORTABLE
