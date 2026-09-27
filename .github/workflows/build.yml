@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ pc_port ]
+    branches: [ vanilla ]
   # Any base branch, so pull requests stacked on other pull requests get checked too
   pull_request:
   workflow_dispatch:
