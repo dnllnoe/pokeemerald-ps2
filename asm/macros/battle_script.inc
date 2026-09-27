@@ -161,7 +161,7 @@
 	ptrvalue \ptr
 	.endm
 
-	.macro jumpifstat battler:req, ifflag:req, stat:req, value:req, ptr
+	.macro jumpifstat battler:req, ifflag:req, stat:req, value:req, ptr:req
 	.byte B_SCR_OP_JUMPIFSTAT
 	.byte \battler
 	.byte \ifflag

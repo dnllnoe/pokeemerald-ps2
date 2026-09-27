@@ -12,7 +12,7 @@
 
 	enum_start
 	.if ALLOCATE_SCRIPT_CMD_TABLE
-	.align 2
+	ptr_align
 gScriptCmdTable::
 	.endif
 	script_cmd_table_entry SCR_OP_NOP                           ScrCmd_nop                            @ 0x00

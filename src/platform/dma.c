@@ -105,9 +105,8 @@ void DmaSet(int dmaNum, const void *src, void *dest, u32 control)
     dma->size = control & 0x1ffff;
     dma->control = control >> 16;
     
-    //todo: get rid of these
-    (&REG_DMA0SAD)[dmaNum * 3] = src;
-    (&REG_DMA0DAD)[dmaNum * 3] = dest;
+    // RunDMAs reads the enable bit back from the control register. The address
+    // registers are 32-bit and nothing reads them, so the pointers stay in DMASet.
     (&REG_DMA0CNT)[dmaNum * 3] = control;
 
     dma = &DMAList[dmaNum];

@@ -15,7 +15,7 @@
 
 	.section .rodata
 
-	.align 2
+	ptr_align
 	.include "data/scripts/gift_stamp_card.inc"
 	.include "data/scripts/gift_pichu.inc"
 	.include "data/scripts/gift_trainer.inc"

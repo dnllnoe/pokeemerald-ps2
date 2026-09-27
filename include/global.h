@@ -128,10 +128,22 @@ int strcmp(const char *, const char*);
 // as these below. Because of this, there is a theory (Two Team Theory) that states that these
 // programming projects had more than 1 "programming team" which utilized different macros for
 // each of the files that were worked on.
+#ifdef PORTABLE
+// Script data packs 64-bit values at any byte offset
+static inline u64 ReadUnalignedU64(const void *ptr)
+{
+    u64 value;
+    memcpy(&value, ptr, sizeof(value));
+    return value;
+}
+#else
+#define ReadUnalignedU64(ptr) (*(u64 *)(ptr))
+#endif
+
 #define T1_READ_8(ptr)  ((ptr)[0])
 #define T1_READ_16(ptr) ((ptr)[0] | ((ptr)[1] << 8))
 #define T1_READ_32(ptr) ((ptr)[0] | ((ptr)[1] << 8) | ((ptr)[2] << 16) | ((ptr)[3] << 24))
-#define T1_READ_64(ptr) (*(u64*)(ptr))
+#define T1_READ_64(ptr) ReadUnalignedU64(ptr)
 
 #ifdef VER_64BIT
 #define T1_READ_PTR(ptr) (u8 *) T1_READ_64(ptr)
@@ -145,7 +157,7 @@ int strcmp(const char *, const char*);
 #define T2_READ_8(ptr)  ((ptr)[0])
 #define T2_READ_16(ptr) ((ptr)[0] + ((ptr)[1] << 8))
 #define T2_READ_32(ptr) ((ptr)[0] + ((ptr)[1] << 8) + ((ptr)[2] << 16) + ((ptr)[3] << 24))
-#define T2_READ_64(ptr) (*(u64*)(ptr))
+#define T2_READ_64(ptr) ReadUnalignedU64(ptr)
 
 #ifdef VER_64BIT
 #define T2_READ_PTR(ptr) (void *) T2_READ_64(ptr)

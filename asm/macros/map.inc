@@ -56,6 +56,7 @@
 	.2byte \target_map_id & 0xFF  /* map num*/
 	.2byte \target_map_id >> 8    /* map group*/
 	.space 8  /* Padding*/
+	space64 8 /* Script pointer and flag are wider on 64-bit, see object_event*/
 	inc _num_npcs
 	.endm
 

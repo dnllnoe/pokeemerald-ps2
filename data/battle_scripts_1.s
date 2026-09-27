@@ -16,7 +16,7 @@
 
 	.section script_data, "aw"
 
-.align 2
+ptr_align
 gBattleScriptsForMoveEffects::
 	ptrvalue BattleScript_EffectHit                    /* EFFECT_HIT*/
 	ptrvalue BattleScript_EffectSleep                  /* EFFECT_SLEEP*/

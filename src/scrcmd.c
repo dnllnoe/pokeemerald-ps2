@@ -55,7 +55,7 @@ typedef u16 (*SpecialFunc)(void);
 typedef void (*NativeFunc)(void);
 
 EWRAM_DATA const u8 *gRamScriptRetAddr = NULL;
-static EWRAM_DATA u32 sAddressOffset = 0; // For relative addressing in vgoto etc., used by saved scripts (e.g. Mystery Event)
+static EWRAM_DATA uintptr_t sAddressOffset = 0; // For relative addressing in vgoto etc., used by saved scripts (e.g. Mystery Event)
 static EWRAM_DATA u16 sPauseCounter = 0;
 static EWRAM_DATA u16 sMovingNpcId = 0;
 static EWRAM_DATA u16 sMovingNpcMapGroup = 0;

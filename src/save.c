@@ -11,6 +11,7 @@
 #include "pokemon_storage_system.h"
 #include "trainer_hill.h"
 #include "link.h"
+#include "constants/characters.h"
 #include "constants/game_stat.h"
 
 static u16 CalculateChecksum(void *, u16);
@@ -42,12 +43,126 @@ static u8 HandleReplaceSector(u16, const struct SaveSectorLocation *);
  * See SECTOR_ID_* constants in save.h
  */
 
-#define SAVEBLOCK_CHUNK(structure, chunkNum)                                   \
-{                                                                              \
-    chunkNum * SECTOR_DATA_SIZE,                                               \
-    sizeof(structure) >= chunkNum * SECTOR_DATA_SIZE ?                         \
-    min(sizeof(structure) - chunkNum * SECTOR_DATA_SIZE, SECTOR_DATA_SIZE) : 0 \
+#define SAVEBLOCK_CHUNK_OF_SIZE(size, chunkNum)                      \
+{                                                                    \
+    chunkNum * SECTOR_DATA_SIZE,                                     \
+    (size) >= chunkNum * SECTOR_DATA_SIZE ?                          \
+    min((size) - chunkNum * SECTOR_DATA_SIZE, SECTOR_DATA_SIZE) : 0  \
 }
+#define SAVEBLOCK_CHUNK(structure, chunkNum) SAVEBLOCK_CHUNK_OF_SIZE(sizeof(structure), chunkNum)
+
+#ifdef VER_64BIT
+/*
+ * On 64-bit builds SaveBlock1 is bigger in memory than on the GBA, because it
+ * contains pointers: the script of each object event template and the two
+ * description lines of the Enigma Berry. The save file keeps the GBA layout,
+ * with 4 bytes for each of those pointers, so saves are interchangeable with
+ * the GBA and 32-bit builds. Its sectors are written from and read into
+ * sSaveBlock1Saved, which is converted from/to gSaveBlock1Ptr.
+ *
+ * The pointers are saved as 0 and loaded as NULL. They are never used after
+ * loading: CB2_ContinueSavedGame restores the object event scripts from the
+ * map, and an Enigma Berry's descriptions only pointed into the e-Reader data
+ * of the game that saved it (its checksum then fails, so it isn't used).
+ *
+ * Any other pointer added to SaveBlock1 has to be converted here as well.
+ */
+
+// struct ObjectEventTemplate as stored in the save
+struct SavedObjectEventTemplate
+{
+    u8 localId;
+    u8 graphicsId;
+    u8 kind;
+    s16 x;
+    s16 y;
+    u8 elevation;
+    u8 movementType;
+    u16 movementRangeX:4;
+    u16 movementRangeY:4;
+    u16 trainerType;
+    u16 trainerRange_berryTreeId;
+    u32 script;
+    u16 flagId;
+};
+
+// struct Berry2 as stored in the save
+struct SavedBerry2
+{
+    u8 name[BERRY_NAME_LENGTH + 1];
+    u8 firmness;
+    u16 size;
+    u8 maxYield;
+    u8 minYield;
+    u32 description1;
+    u32 description2;
+    u8 stageDuration;
+    u8 spicy;
+    u8 dry;
+    u8 sweet;
+    u8 bitter;
+    u8 sour;
+    u8 smoothness;
+};
+
+// struct EnigmaBerry as stored in the save
+struct SavedEnigmaBerry
+{
+    struct SavedBerry2 berry;
+    u8 itemEffect[BERRY_ITEM_EFFECT_COUNT];
+    u8 holdEffect;
+    u8 holdEffectParam;
+    u32 checksum;
+};
+
+STATIC_ASSERT(sizeof(struct SavedObjectEventTemplate) == 0x18, SavedObjectEventTemplateSize);
+STATIC_ASSERT(sizeof(struct SavedEnigmaBerry) == 0x34, SavedEnigmaBerrySize);
+
+// Where the converted parts are in memory...
+#define SB1_TEMPLATES_OFFSET  offsetof(struct SaveBlock1, objectEventTemplates)
+#define SB1_TEMPLATES_END     (SB1_TEMPLATES_OFFSET + OBJECT_EVENT_TEMPLATES_COUNT * sizeof(struct ObjectEventTemplate))
+#define SB1_ENIGMA_OFFSET     offsetof(struct SaveBlock1, enigmaBerry)
+#define SB1_ENIGMA_END        (SB1_ENIGMA_OFFSET + sizeof(struct EnigmaBerry))
+#define SB1_END               (offsetof(struct SaveBlock1, waldaPhrase) + sizeof(struct WaldaPhrase))
+
+// ...and in the save. Everything in between has the same layout in both.
+#define SAVED_TEMPLATES_END   (SB1_TEMPLATES_OFFSET + OBJECT_EVENT_TEMPLATES_COUNT * sizeof(struct SavedObjectEventTemplate))
+#define SAVED_ENIGMA_OFFSET   (SAVED_TEMPLATES_END + SB1_ENIGMA_OFFSET - SB1_TEMPLATES_END)
+#define SAVED_ENIGMA_END      (SAVED_ENIGMA_OFFSET + sizeof(struct SavedEnigmaBerry))
+#define SAVEBLOCK1_SAVE_SIZE  (SAVED_ENIGMA_END + SB1_END - SB1_ENIGMA_END)
+
+STATIC_ASSERT(SB1_TEMPLATES_END <= SB1_ENIGMA_OFFSET, SaveBlock1ConvertedPartsInOrder);
+
+EWRAM_DATA static u8 sSaveBlock1Saved[SAVEBLOCK1_SAVE_SIZE] ALIGNED(4) = {0};
+
+/*
+ * Before saves used the GBA layout, 64-bit builds saved SaveBlock1 as it is in
+ * memory, with only 10 secret bases so that it fit. Such saves are migrated
+ * when loaded (see IsOld64BitSaveBlock1).
+ */
+#define OLD_64BIT_SECRET_BASES_COUNT 10
+#define OLD_64BIT_SAVEBLOCK1_SIZE (sizeof(struct SaveBlock1) - (SECRET_BASES_COUNT - OLD_64BIT_SECRET_BASES_COUNT) * sizeof(struct SecretBase))
+
+STATIC_ASSERT(OLD_64BIT_SAVEBLOCK1_SIZE > (SECTOR_ID_SAVEBLOCK1_END - SECTOR_ID_SAVEBLOCK1_START) * SECTOR_DATA_SIZE
+           && OLD_64BIT_SAVEBLOCK1_SIZE < SAVEBLOCK1_SAVE_SIZE, Old64BitSaveBlock1EndsInLastSector);
+
+static void SaveBlock1ToSaved(void);
+static void SaveBlock1FromSaved(void);
+static bool32 IsOld64BitSaveBlock1(const struct SaveSectorLocation *locations);
+static void SaveBlock1FromOld64Bit(void);
+
+// Called right before a sector's data is copied out to be written. SaveBlock1
+// is converted as late as possible, since the game copies things like the
+// party into it after UpdateSaveAddresses.
+static void PrepareSectorData(u16 sectorId)
+{
+    if (sectorId >= SECTOR_ID_SAVEBLOCK1_START && sectorId <= SECTOR_ID_SAVEBLOCK1_END)
+        SaveBlock1ToSaved();
+}
+#else
+#define SAVEBLOCK1_SAVE_SIZE sizeof(struct SaveBlock1)
+#define PrepareSectorData(sectorId)
+#endif
 
 struct
 {
@@ -57,10 +172,10 @@ struct
 {
     SAVEBLOCK_CHUNK(struct SaveBlock2, 0), // SECTOR_ID_SAVEBLOCK2
 
-    SAVEBLOCK_CHUNK(struct SaveBlock1, 0), // SECTOR_ID_SAVEBLOCK1_START
-    SAVEBLOCK_CHUNK(struct SaveBlock1, 1),
-    SAVEBLOCK_CHUNK(struct SaveBlock1, 2),
-    SAVEBLOCK_CHUNK(struct SaveBlock1, 3), // SECTOR_ID_SAVEBLOCK1_END
+    SAVEBLOCK_CHUNK_OF_SIZE(SAVEBLOCK1_SAVE_SIZE, 0), // SECTOR_ID_SAVEBLOCK1_START
+    SAVEBLOCK_CHUNK_OF_SIZE(SAVEBLOCK1_SAVE_SIZE, 1),
+    SAVEBLOCK_CHUNK_OF_SIZE(SAVEBLOCK1_SAVE_SIZE, 2),
+    SAVEBLOCK_CHUNK_OF_SIZE(SAVEBLOCK1_SAVE_SIZE, 3), // SECTOR_ID_SAVEBLOCK1_END
 
     SAVEBLOCK_CHUNK(struct PokemonStorage, 0), // SECTOR_ID_PKMN_STORAGE_START
     SAVEBLOCK_CHUNK(struct PokemonStorage, 1),
@@ -76,7 +191,7 @@ struct
 // These will produce an error if a save struct is larger than the space
 // alloted for it in the flash.
 STATIC_ASSERT(sizeof(struct SaveBlock2) <= SECTOR_DATA_SIZE, SaveBlock2FreeSpace);
-STATIC_ASSERT(sizeof(struct SaveBlock1) <= SECTOR_DATA_SIZE * (SECTOR_ID_SAVEBLOCK1_END - SECTOR_ID_SAVEBLOCK1_START + 1), SaveBlock1FreeSpace);
+STATIC_ASSERT(SAVEBLOCK1_SAVE_SIZE <= SECTOR_DATA_SIZE * (SECTOR_ID_SAVEBLOCK1_END - SECTOR_ID_SAVEBLOCK1_START + 1), SaveBlock1FreeSpace);
 STATIC_ASSERT(sizeof(struct PokemonStorage) <= SECTOR_DATA_SIZE * (SECTOR_ID_PKMN_STORAGE_END - SECTOR_ID_PKMN_STORAGE_START + 1), PokemonStorageFreeSpace);
 
 COMMON_DATA u16 gLastWrittenSector = 0;
@@ -187,6 +302,7 @@ static u8 HandleWriteSector(u16 sectorId, const struct SaveSectorLocation *locat
     sector += NUM_SECTORS_PER_SLOT * (gSaveCounter % NUM_SAVE_SLOTS);
 
     // Get current save data
+    PrepareSectorData(sectorId);
     data = locations[sectorId].data;
     size = locations[sectorId].size;
 
@@ -321,6 +437,7 @@ static u8 HandleReplaceSector(u16 sectorId, const struct SaveSectorLocation *loc
     sector += NUM_SECTORS_PER_SLOT * (gSaveCounter % NUM_SAVE_SLOTS);
 
     // Get current save data
+    PrepareSectorData(sectorId);
     data = locations[sectorId].data;
     size = locations[sectorId].size;
 
@@ -686,6 +803,176 @@ static u16 CalculateChecksum(void *data, u16 size)
     return ((checksum >> 16) + checksum);
 }
 
+#ifdef VER_64BIT
+static void SaveBlock1ToSaved(void)
+{
+    const u8 *block = (const u8 *)gSaveBlock1Ptr;
+    struct SavedObjectEventTemplate *savedTemplates = (void *)&sSaveBlock1Saved[SB1_TEMPLATES_OFFSET];
+    struct SavedEnigmaBerry *savedBerry = (void *)&sSaveBlock1Saved[SAVED_ENIGMA_OFFSET];
+    const struct EnigmaBerry *berry;
+    s32 i;
+
+    if (gSaveBlock1Ptr == NULL)
+        return;
+
+    // Padding is saved as 0, and so are the pointers
+    memset(sSaveBlock1Saved, 0, sizeof(sSaveBlock1Saved));
+
+    memcpy(sSaveBlock1Saved, block, SB1_TEMPLATES_OFFSET);
+    for (i = 0; i < OBJECT_EVENT_TEMPLATES_COUNT; i++)
+    {
+        const struct ObjectEventTemplate *template = &gSaveBlock1Ptr->objectEventTemplates[i];
+
+        savedTemplates[i].localId = template->localId;
+        savedTemplates[i].graphicsId = template->graphicsId;
+        savedTemplates[i].kind = template->kind;
+        savedTemplates[i].x = template->x;
+        savedTemplates[i].y = template->y;
+        savedTemplates[i].elevation = template->elevation;
+        savedTemplates[i].movementType = template->movementType;
+        savedTemplates[i].movementRangeX = template->movementRangeX;
+        savedTemplates[i].movementRangeY = template->movementRangeY;
+        savedTemplates[i].trainerType = template->trainerType;
+        savedTemplates[i].trainerRange_berryTreeId = template->trainerRange_berryTreeId;
+        savedTemplates[i].flagId = template->flagId;
+    }
+
+    memcpy(&sSaveBlock1Saved[SAVED_TEMPLATES_END], &block[SB1_TEMPLATES_END], SB1_ENIGMA_OFFSET - SB1_TEMPLATES_END);
+
+    berry = &gSaveBlock1Ptr->enigmaBerry;
+    memcpy(savedBerry->berry.name, berry->berry.name, sizeof(savedBerry->berry.name));
+    savedBerry->berry.firmness = berry->berry.firmness;
+    savedBerry->berry.size = berry->berry.size;
+    savedBerry->berry.maxYield = berry->berry.maxYield;
+    savedBerry->berry.minYield = berry->berry.minYield;
+    savedBerry->berry.stageDuration = berry->berry.stageDuration;
+    savedBerry->berry.spicy = berry->berry.spicy;
+    savedBerry->berry.dry = berry->berry.dry;
+    savedBerry->berry.sweet = berry->berry.sweet;
+    savedBerry->berry.bitter = berry->berry.bitter;
+    savedBerry->berry.sour = berry->berry.sour;
+    savedBerry->berry.smoothness = berry->berry.smoothness;
+    memcpy(savedBerry->itemEffect, berry->itemEffect, sizeof(savedBerry->itemEffect));
+    savedBerry->holdEffect = berry->holdEffect;
+    savedBerry->holdEffectParam = berry->holdEffectParam;
+    savedBerry->checksum = berry->checksum;
+
+    memcpy(&sSaveBlock1Saved[SAVED_ENIGMA_END], &block[SB1_ENIGMA_END], SB1_END - SB1_ENIGMA_END);
+}
+
+static void SaveBlock1FromSaved(void)
+{
+    u8 *block = (u8 *)gSaveBlock1Ptr;
+    const struct SavedObjectEventTemplate *savedTemplates = (const void *)&sSaveBlock1Saved[SB1_TEMPLATES_OFFSET];
+    const struct SavedEnigmaBerry *savedBerry = (const void *)&sSaveBlock1Saved[SAVED_ENIGMA_OFFSET];
+    struct EnigmaBerry *berry;
+    s32 i;
+
+    memcpy(block, sSaveBlock1Saved, SB1_TEMPLATES_OFFSET);
+    for (i = 0; i < OBJECT_EVENT_TEMPLATES_COUNT; i++)
+    {
+        struct ObjectEventTemplate *template = &gSaveBlock1Ptr->objectEventTemplates[i];
+
+        memset(template, 0, sizeof(*template));
+        template->localId = savedTemplates[i].localId;
+        template->graphicsId = savedTemplates[i].graphicsId;
+        template->kind = savedTemplates[i].kind;
+        template->x = savedTemplates[i].x;
+        template->y = savedTemplates[i].y;
+        template->elevation = savedTemplates[i].elevation;
+        template->movementType = savedTemplates[i].movementType;
+        template->movementRangeX = savedTemplates[i].movementRangeX;
+        template->movementRangeY = savedTemplates[i].movementRangeY;
+        template->trainerType = savedTemplates[i].trainerType;
+        template->trainerRange_berryTreeId = savedTemplates[i].trainerRange_berryTreeId;
+        template->script = NULL;
+        template->flagId = savedTemplates[i].flagId;
+    }
+
+    memcpy(&block[SB1_TEMPLATES_END], &sSaveBlock1Saved[SAVED_TEMPLATES_END], SB1_ENIGMA_OFFSET - SB1_TEMPLATES_END);
+
+    // Cleared first so the padding doesn't affect the berry's checksum
+    berry = &gSaveBlock1Ptr->enigmaBerry;
+    memset(berry, 0, sizeof(*berry));
+    memcpy(berry->berry.name, savedBerry->berry.name, sizeof(berry->berry.name));
+    berry->berry.firmness = savedBerry->berry.firmness;
+    berry->berry.size = savedBerry->berry.size;
+    berry->berry.maxYield = savedBerry->berry.maxYield;
+    berry->berry.minYield = savedBerry->berry.minYield;
+    berry->berry.description1 = NULL;
+    berry->berry.description2 = NULL;
+    berry->berry.stageDuration = savedBerry->berry.stageDuration;
+    berry->berry.spicy = savedBerry->berry.spicy;
+    berry->berry.dry = savedBerry->berry.dry;
+    berry->berry.sweet = savedBerry->berry.sweet;
+    berry->berry.bitter = savedBerry->berry.bitter;
+    berry->berry.sour = savedBerry->berry.sour;
+    berry->berry.smoothness = savedBerry->berry.smoothness;
+    memcpy(berry->itemEffect, savedBerry->itemEffect, sizeof(berry->itemEffect));
+    berry->holdEffect = savedBerry->holdEffect;
+    berry->holdEffectParam = savedBerry->holdEffectParam;
+    berry->checksum = savedBerry->checksum;
+
+    memcpy(&block[SB1_ENIGMA_END], &sSaveBlock1Saved[SAVED_ENIGMA_END], SB1_END - SB1_ENIGMA_END);
+}
+
+// An old 64-bit SaveBlock1 is shorter than the GBA layout, so the end of its
+// last sector was left empty. In the GBA layout that part always has data,
+// e.g. the Union Room phrases that get set when starting a new game.
+static bool32 IsOld64BitSaveBlock1(const struct SaveSectorLocation *locations)
+{
+    u16 slotOffset = NUM_SECTORS_PER_SLOT * (gSaveCounter % NUM_SAVE_SLOTS);
+    u16 emptyStart = OLD_64BIT_SAVEBLOCK1_SIZE - sSaveSlotLayout[SECTOR_ID_SAVEBLOCK1_END].offset;
+    u16 i, j;
+
+    // Look at the last SaveBlock1 sector of the slot that was loaded
+    for (i = 0; i < NUM_SECTORS_PER_SLOT; i++)
+    {
+        ReadFlashSector(i + slotOffset, gReadWriteSector);
+        if (gReadWriteSector->id != SECTOR_ID_SAVEBLOCK1_END)
+            continue;
+
+        if (gReadWriteSector->signature != SECTOR_SIGNATURE
+         || gReadWriteSector->checksum != CalculateChecksum(gReadWriteSector->data, locations[SECTOR_ID_SAVEBLOCK1_END].size))
+            return FALSE;
+
+        for (j = emptyStart; j < locations[SECTOR_ID_SAVEBLOCK1_END].size; j++)
+        {
+            if (gReadWriteSector->data[j] != 0)
+                return FALSE;
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
+// The old layout is the in-memory one, with fewer secret bases
+static void SaveBlock1FromOld64Bit(void)
+{
+    u8 *block = (u8 *)gSaveBlock1Ptr;
+    size_t basesOffset = offsetof(struct SaveBlock1, secretBases);
+    size_t oldBasesEnd = basesOffset + OLD_64BIT_SECRET_BASES_COUNT * sizeof(struct SecretBase);
+    size_t basesEnd = basesOffset + SECRET_BASES_COUNT * sizeof(struct SecretBase);
+    s32 i;
+
+    memcpy(block, sSaveBlock1Saved, oldBasesEnd);
+    memcpy(&block[basesEnd], &sSaveBlock1Saved[oldBasesEnd], OLD_64BIT_SAVEBLOCK1_SIZE - oldBasesEnd);
+
+    // Empty the added secret bases, like ClearSecretBase
+    for (i = OLD_64BIT_SECRET_BASES_COUNT; i < SECRET_BASES_COUNT; i++)
+    {
+        memset(&gSaveBlock1Ptr->secretBases[i], 0, sizeof(struct SecretBase));
+        memset(gSaveBlock1Ptr->secretBases[i].trainerName, EOS, PLAYER_NAME_LENGTH);
+    }
+
+    // These were saved as pointers into the build that saved them
+    for (i = 0; i < OBJECT_EVENT_TEMPLATES_COUNT; i++)
+        gSaveBlock1Ptr->objectEventTemplates[i].script = NULL;
+    gSaveBlock1Ptr->enigmaBerry.berry.description1 = NULL;
+    gSaveBlock1Ptr->enigmaBerry.berry.description2 = NULL;
+}
+#endif
+
 static void UpdateSaveAddresses(void)
 {
     int i = SECTOR_ID_SAVEBLOCK2;
@@ -694,7 +981,11 @@ static void UpdateSaveAddresses(void)
 
     for (i = SECTOR_ID_SAVEBLOCK1_START; i <= SECTOR_ID_SAVEBLOCK1_END; i++)
     {
+#ifdef VER_64BIT
+        gRamSaveSectorLocations[i].data = sSaveBlock1Saved + sSaveSlotLayout[i].offset;
+#else
         gRamSaveSectorLocations[i].data = (void *)(gSaveBlock1Ptr) + sSaveSlotLayout[i].offset;
+#endif
         gRamSaveSectorLocations[i].size = sSaveSlotLayout[i].size;
     }
 
@@ -892,7 +1183,17 @@ u8 LoadGameSave(u8 saveType)
     {
     case SAVE_NORMAL:
     default:
+#ifdef VER_64BIT
+        // Sectors that fail to load keep the current data, like on the GBA
+        SaveBlock1ToSaved();
+#endif
         status = TryLoadSaveSlot(FULL_SAVE_SLOT, gRamSaveSectorLocations);
+#ifdef VER_64BIT
+        if (IsOld64BitSaveBlock1(gRamSaveSectorLocations))
+            SaveBlock1FromOld64Bit();
+        else
+            SaveBlock1FromSaved();
+#endif
         CopyPartyAndObjectsFromSave();
         gSaveFileStatus = status;
         gGameContinueCallback = NULL;

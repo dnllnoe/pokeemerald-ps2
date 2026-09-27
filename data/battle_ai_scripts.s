@@ -13,7 +13,7 @@
 
 	.section script_data, "aw"
 
-	.align 2
+	ptr_align
 gBattleAI_ScriptsTable::
 	ptrvalue AI_CheckBadMove          /* AI_SCRIPT_CHECK_BAD_MOVE*/
 	ptrvalue AI_TryToFaint            /* AI_SCRIPT_TRY_TO_FAINT*/

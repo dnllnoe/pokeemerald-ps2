@@ -1,4 +1,4 @@
-	.align 2
+	ptr_align
 gCryTable::
 	cry Cry_Bulbasaur
 	cry Cry_Ivysaur
@@ -389,7 +389,7 @@ gCryTable::
 	cry Cry_Deoxys
 	cry Cry_Chimecho
 
-	.align 2
+	ptr_align
 gCryTable_Reverse::
 	cry_reverse Cry_Bulbasaur
 	cry_reverse Cry_Ivysaur

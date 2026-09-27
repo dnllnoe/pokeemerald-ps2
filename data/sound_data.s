@@ -11,4 +11,4 @@
 	.include "sound/song_table.inc"
 	.include "sound/direct_sound_data.inc"
 
-	.align 2
+	ptr_align

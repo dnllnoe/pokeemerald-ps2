@@ -13,7 +13,7 @@
 	enum MON_3
 	enum MON_4
 
-	.align 2
+	ptr_align
 gContestAI_ScriptsTable::
 	ptrvalue AI_CheckBadMove      /* CONTEST_AI_CHECK_BAD_MOVE*/
 	ptrvalue AI_CheckCombo        /* CONTEST_AI_CHECK_COMBO*/

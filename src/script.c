@@ -185,7 +185,7 @@ u32 ScriptReadWord(struct ScriptContext *ctx)
 
 u64 ScriptReadQuadWord(struct ScriptContext *ctx)
 {
-    u64 value0 = *((u64*)ctx->scriptPtr);
+    u64 value0 = ReadUnalignedU64(ctx->scriptPtr);
     ctx->scriptPtr += 8;
     return value0;
 }
@@ -193,7 +193,7 @@ u64 ScriptReadQuadWord(struct ScriptContext *ctx)
 uintptr_t ScriptReadPointer(struct ScriptContext *ctx)
 {
     #ifdef VER_64BIT
-    uintptr_t value0 = *((u64*)ctx->scriptPtr);
+    uintptr_t value0 = ReadUnalignedU64(ctx->scriptPtr);
     #else
     uintptr_t value0 = T2_READ_32(ctx->scriptPtr);
     #endif

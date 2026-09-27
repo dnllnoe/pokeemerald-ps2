@@ -43,6 +43,17 @@ double timeScale = 1.0;
 struct SiiRtcInfo internalClock;
 
 static FILE *sSaveFile = NULL;
+static const char *sSavePath = "pokeemerald.sav";
+
+// Headless test mode, see RunTestMode()
+static bool sTestMode = false;
+static FILE *sTestInput;
+static FILE *sTestHashes;
+static const char *sTestShotDir;
+static u32 sTestShotEvery;
+static time_t sTestClockBase = 1767268800; // 2026-01-01 12:00:00 UTC
+static u32 sTestFrame;
+static u64 sTestAudioHash;
 
 extern void AgbMain(void);
 extern void MainLoop(void);
@@ -52,11 +63,14 @@ int DoMain(void *param);
 void ProcessEvents(void);
 void VDraw(SDL_Texture *texture);
 
-static void ReadSaveFile(char *path);
+static void ReadSaveFile(const char *path);
 static void StoreSaveFile(void);
 static void CloseSaveFile(void);
 
 static void UpdateInternalClock(void);
+
+static bool ParseArgs(int argc, char **argv);
+static int RunTestMode(void);
 
 int main(int argc, char **argv)
 {
@@ -67,7 +81,13 @@ int main(int argc, char **argv)
     freopen( "CON", "w", stdout ) ;
 #endif
 
-    ReadSaveFile("pokeemerald.sav");
+    if (!ParseArgs(argc, argv))
+        return 1;
+
+    ReadSaveFile(sSavePath);
+
+    if (sTestMode)
+        return RunTestMode();
 
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
     {
@@ -197,7 +217,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-static void ReadSaveFile(char *path)
+static void ReadSaveFile(const char *path)
 {
     // Check whether the saveFile exists, and create it if not
     sSaveFile = fopen(path, "r+b");
@@ -240,7 +260,7 @@ void Platform_StoreSaveFile(void)
 void Platform_ReadFlash(u16 sectorNum, u32 offset, u8 *dest, u32 size)
 {
     DBGPRINTF("ReadFlash(sectorNum=0x%04X,offset=0x%08X,size=0x%02X)\n",sectorNum,offset,size);
-    FILE * savefile = fopen("pokeemerald.sav", "r+b");
+    FILE * savefile = fopen(sSavePath, "r+b");
     if (savefile == NULL)
     {
         puts("Error opening save file.");
@@ -259,9 +279,22 @@ void Platform_ReadFlash(u16 sectorNum, u32 offset, u8 *dest, u32 size)
     fclose(savefile);
 }
 
+static u64 HashBytes(u64 hash, const void *data, size_t size)
+{
+    const u8 *bytes = data;
+
+    // FNV-1a
+    for (size_t i = 0; i < size; i++)
+        hash = (hash ^ bytes[i]) * 0x100000001B3ull;
+    return hash;
+}
+
 void Platform_QueueAudio(float *audioBuffer, s32 samplesPerFrame)
 {
-    SDL_QueueAudio(1, audioBuffer, samplesPerFrame);
+    if (sTestMode)
+        sTestAudioHash = HashBytes(sTestAudioHash, audioBuffer, samplesPerFrame);
+    else
+        SDL_QueueAudio(1, audioBuffer, samplesPerFrame);
 }
 
 
@@ -497,16 +530,27 @@ void Platform_SetStatus(struct SiiRtcInfo *rtc)
 
 static void UpdateInternalClock(void)
 {
-    time_t rawTime = time(NULL);
-    struct tm *time = localtime(&rawTime);
+    struct tm *now;
 
-    internalClock.year = BinToBcd(time->tm_year - 100);
-    internalClock.month = BinToBcd(time->tm_mon + 1);
-    internalClock.day = BinToBcd(time->tm_mday);
-    internalClock.dayOfWeek = BinToBcd(time->tm_wday);
-    internalClock.hour = BinToBcd(time->tm_hour);
-    internalClock.minute = BinToBcd(time->tm_min);
-    internalClock.second = BinToBcd(time->tm_sec);
+    if (sTestMode)
+    {
+        // Deterministic clock: advances one second every 60 frames
+        time_t rawTime = sTestClockBase + sTestFrame / 60;
+        now = gmtime(&rawTime);
+    }
+    else
+    {
+        time_t rawTime = time(NULL);
+        now = localtime(&rawTime);
+    }
+
+    internalClock.year = BinToBcd(now->tm_year - 100);
+    internalClock.month = BinToBcd(now->tm_mon + 1);
+    internalClock.day = BinToBcd(now->tm_mday);
+    internalClock.dayOfWeek = BinToBcd(now->tm_wday);
+    internalClock.hour = BinToBcd(now->tm_hour);
+    internalClock.minute = BinToBcd(now->tm_min);
+    internalClock.second = BinToBcd(now->tm_sec);
 }
 
 void Platform_GetDateTime(struct SiiRtcInfo *rtc)
@@ -566,6 +610,187 @@ void SoftReset(u32 resetFlags)
 {
     puts("Soft Reset called. Exiting.");
     exit(0);
+}
+
+// All options take a value. Anything else is ignored, like before there were
+// options, so e.g. a file dropped onto the executable doesn't stop the game.
+static bool ParseArgs(int argc, char **argv)
+{
+    for (int i = 1; i < argc; i++)
+    {
+        const char *arg = argv[i];
+        const char *value = (i + 1 < argc) ? argv[i + 1] : NULL;
+
+        if (strncmp(arg, "--", 2) != 0 || value == NULL)
+        {
+            fprintf(stderr, "Ignoring argument: %s\n", arg);
+            continue;
+        }
+        i++;
+
+        if (strcmp(arg, "--save") == 0)
+        {
+            sSavePath = value;
+        }
+        else if (strcmp(arg, "--test-input") == 0)
+        {
+            sTestMode = true;
+            sTestInput = fopen(value, "r");
+            if (sTestInput == NULL)
+            {
+                fprintf(stderr, "Could not open test input %s\n", value);
+                return false;
+            }
+        }
+        else if (strcmp(arg, "--test-hashes") == 0)
+        {
+            sTestHashes = fopen(value, "w");
+            if (sTestHashes == NULL)
+            {
+                fprintf(stderr, "Could not open hash output %s\n", value);
+                return false;
+            }
+        }
+        else if (strcmp(arg, "--test-shots") == 0)
+        {
+            sTestShotDir = value;
+        }
+        else if (strcmp(arg, "--test-shot-every") == 0)
+        {
+            sTestShotEvery = strtoul(value, NULL, 10);
+        }
+        else if (strcmp(arg, "--test-time") == 0)
+        {
+            sTestClockBase = strtoll(value, NULL, 10);
+        }
+        else
+        {
+            fprintf(stderr, "Ignoring unknown option: %s %s\n", arg, value);
+        }
+    }
+    return true;
+}
+
+// Reads the keys to hold for the next frame from the test input. Each line is
+// "<frames> <buttons>", where buttons is "-" or names joined by '+', e.g.
+// "30 A+UP". Lines starting with '#' are ignored. Returns false at the end.
+static bool ReadTestInput(u16 *outKeys)
+{
+    static const struct { const char *name; u16 key; } sButtons[] = {
+        {"A", A_BUTTON}, {"B", B_BUTTON}, {"SELECT", SELECT_BUTTON}, {"START", START_BUTTON},
+        {"RIGHT", DPAD_RIGHT}, {"LEFT", DPAD_LEFT}, {"UP", DPAD_UP}, {"DOWN", DPAD_DOWN},
+        {"R", R_BUTTON}, {"L", L_BUTTON},
+    };
+    static u32 sHoldFrames;
+    static u16 sHoldKeys;
+    char line[256];
+
+    while (sHoldFrames == 0)
+    {
+        char buttons[200];
+
+        if (fgets(line, sizeof(line), sTestInput) == NULL)
+            return false;
+        if (line[0] == '#' || sscanf(line, "%u %199s", &sHoldFrames, buttons) != 2)
+        {
+            sHoldFrames = 0;
+            continue;
+        }
+
+        sHoldKeys = 0;
+        for (char *name = strtok(buttons, "+"); name != NULL; name = strtok(NULL, "+"))
+        {
+            size_t i;
+
+            if (strcmp(name, "-") == 0)
+                continue;
+            for (i = 0; i < ARRAY_COUNT(sButtons); i++)
+            {
+                if (strcmp(name, sButtons[i].name) == 0)
+                {
+                    sHoldKeys |= sButtons[i].key;
+                    break;
+                }
+            }
+            if (i == ARRAY_COUNT(sButtons))
+                fprintf(stderr, "Unknown button in test input: %s\n", name);
+        }
+    }
+
+    sHoldFrames--;
+    *outKeys = sHoldKeys;
+    return true;
+}
+
+static void WriteTestScreenshot(const uint16_t *image)
+{
+    char path[512];
+    FILE *file;
+
+    snprintf(path, sizeof(path), "%s/frame_%06u.ppm", sTestShotDir, sTestFrame);
+    file = fopen(path, "wb");
+    if (file == NULL)
+    {
+        fprintf(stderr, "Could not write screenshot %s\n", path);
+        return;
+    }
+
+    fprintf(file, "P6\n%d %d\n255\n", DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    for (int i = 0; i < DISPLAY_WIDTH * DISPLAY_HEIGHT; i++)
+    {
+        // ABGR1555
+        u8 rgb[3] = {
+            (image[i] & 0x1F) << 3,
+            ((image[i] >> 5) & 0x1F) << 3,
+            ((image[i] >> 10) & 0x1F) << 3,
+        };
+        fwrite(rgb, 1, sizeof(rgb), file);
+    }
+    fclose(file);
+}
+
+// Runs the game without a window or audio device until the test input ends.
+// Every frame runs one audio update and uses a fixed clock, so the output only
+// depends on the input and the save file. Writes "<frame> <video hash> <audio
+// hash>" per frame, which lets two builds be compared frame by frame.
+static int RunTestMode(void)
+{
+    static uint16_t image[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+
+    cgb_audio_init(42048);
+    AgbMain();
+
+    memset(&internalClock, 0, sizeof(internalClock));
+    internalClock.status = SIIRTCINFO_24HOUR;
+    UpdateInternalClock();
+
+    for (sTestFrame = 0; ReadTestInput(&keys); sTestFrame++)
+    {
+        ENTER_VBLANK();
+        MainLoop();
+        memset(image, 0, sizeof(image));
+        DrawFrame(image);
+        REG_VCOUNT = 161;
+        RunDMAsAndVBlank();
+
+        sTestAudioHash = 0xCBF29CE484222325ull;
+        AudioUpdate();
+
+        if (sTestHashes != NULL)
+            fprintf(sTestHashes, "%u %016llx %016llx\n", sTestFrame,
+                    (unsigned long long)HashBytes(0xCBF29CE484222325ull, image, sizeof(image)),
+                    (unsigned long long)sTestAudioHash);
+        if (sTestShotDir != NULL && sTestShotEvery != 0 && sTestFrame % sTestShotEvery == 0)
+            WriteTestScreenshot(image);
+    }
+
+    if (sTestShotDir != NULL)
+        WriteTestScreenshot(image);
+    if (sTestHashes != NULL)
+        fclose(sTestHashes);
+    fclose(sTestInput);
+    CloseSaveFile();
+    return 0;
 }
 
 #endif

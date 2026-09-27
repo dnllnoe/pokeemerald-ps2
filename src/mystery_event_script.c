@@ -314,7 +314,7 @@ bool8 MEScrCmd_givepokemon(struct ScriptContext *ctx)
     struct Pokemon pokemon;
     u16 species;
     u16 heldItem;
-    uintptr_t data = ScriptReadQuadWord(ctx) - ctx->mOffset + ctx->mScriptBase;
+    uintptr_t data = ScriptReadWord(ctx) - ctx->mOffset + ctx->mScriptBase;
     void *pokemonPtr = (void *)data;
     void *mailPtr = (void *)(data + sizeof(struct Pokemon));
 
@@ -357,7 +357,7 @@ bool8 MEScrCmd_givepokemon(struct ScriptContext *ctx)
 
 bool8 MEScrCmd_addtrainer(struct ScriptContext *ctx)
 {
-    uintptr_t data = ScriptReadQuadWord(ctx) - ctx->mOffset + ctx->mScriptBase;
+    uintptr_t data = ScriptReadWord(ctx) - ctx->mOffset + ctx->mScriptBase;
     memcpy(&gSaveBlock2Ptr->frontier.ereaderTrainer, (void *)data, sizeof(gSaveBlock2Ptr->frontier.ereaderTrainer));
     ValidateEReaderTrainer();
     StringExpandPlaceholders(gStringVar4, gText_MysteryEventNewTrainer);

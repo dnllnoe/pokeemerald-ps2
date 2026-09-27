@@ -5,7 +5,7 @@
 	.equiv NUM_TRACKS_SE3, 1
 
     .bss
-    .align 2
+    ptr_align
 
 .ifndef PORTABLE
 gMPlayTrack_BGM::
@@ -27,7 +27,7 @@ gMPlayTrack_SE3::
 
 	.section .rodata
 
-	.align 2
+	ptr_align
     
 gMPlayTable::
 	music_player gMPlayInfo_BGM, gMPlayTrack_BGM, NUM_TRACKS_BGM, 0

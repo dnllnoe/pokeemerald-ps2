@@ -779,7 +779,7 @@ u32 FieldEffectScript_ReadWord(u8 **script)
 #ifdef VER_64BIT
 u64 FieldEffectScript_ReadPtr(u8 **script)
 {
-    return *(u64*)(*script);
+    return ReadUnalignedU64(*script);
 }
 #else
 u32 FieldEffectScript_ReadPtr(u8 **script)

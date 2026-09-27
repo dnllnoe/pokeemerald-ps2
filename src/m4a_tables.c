@@ -273,6 +273,7 @@ const u8 gClockTable[] =
     0x60,
 };
 
+#define W00    0x80
 #define FINE   0xb1
 #define GOTO   0xb2
 #define PATT   0xb3
@@ -313,6 +314,11 @@ const struct PokemonCrySong gPokemonCrySongTemplate =
     .gap = 0,
     .part0 = TUNE,
     .tuneValue = C_V,
+#ifdef VER_64BIT
+    // Padding before the pointer, but it's inside track 0's commands: waits
+    // of length 0 do nothing, while zeros would repeat TUNE with a value of 0
+    .gap2 = {W00, W00, W00, W00},
+#endif
     .gotoCmd = GOTO,
     .gotoTarget = 0,
     .part1 = TUNE,

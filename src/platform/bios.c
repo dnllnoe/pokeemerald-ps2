@@ -301,10 +301,10 @@ void RLUnCompVram(const u32 *src, void *dest)
             while (blockHeader-- && remaining)
             {
                 remaining--;
-                if ((u32)dest & 1)
+                if ((uintptr_t)dest & 1)
                 {
                     halfWord |= block << 8;
-                    CPUWriteHalfWord((u32)dest ^ 1, halfWord);
+                    CPUWriteHalfWord((void *)((uintptr_t)dest ^ 1), halfWord);
                 }
                 else
                     halfWord = block;
@@ -319,10 +319,10 @@ void RLUnCompVram(const u32 *src, void *dest)
                 remaining--;
                 u8 byte = CPUReadByte(src);
                 src++;
-                if ((u32)dest & 1)
+                if ((uintptr_t)dest & 1)
                 {
                     halfWord |= byte << 8;
-                    CPUWriteHalfWord((u32)dest ^ 1, halfWord);
+                    CPUWriteHalfWord((void *)((uintptr_t)dest ^ 1), halfWord);
                 }
                 else
                     halfWord = byte;
@@ -330,7 +330,7 @@ void RLUnCompVram(const u32 *src, void *dest)
             }
         }
     }
-    if ((u32)dest & 1)
+    if ((uintptr_t)dest & 1)
     {
         padding--;
         dest++;

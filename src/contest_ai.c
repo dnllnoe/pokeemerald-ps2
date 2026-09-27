@@ -867,9 +867,9 @@ static void ContestAICmd_if_most_jamming_move(void)
     ContestAICmd_check_most_jamming_move();
 
     if (eContestAI.scriptResult != FALSE)
-        gAIScriptPtr = T1_READ_PTR(gAIScriptPtr + DSIZE8BIT);
+        gAIScriptPtr = T1_READ_PTR(gAIScriptPtr);
     else
-        gAIScriptPtr += DSIZE8BIT + DSIZEPTR;
+        gAIScriptPtr += DSIZEPTR;
 }
 
 static void ContestAICmd_get_num_move_hearts(void)

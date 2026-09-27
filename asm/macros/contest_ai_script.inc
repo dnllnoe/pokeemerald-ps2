@@ -296,7 +296,7 @@
 
 	.macro if_most_jamming_move destination:req
 	.byte 0x30
-	.4bye \destination
+	ptrvalue \destination
 	.endm
 
 /* number of hearts the current move's appeal would provide*/
@@ -542,7 +542,6 @@
 	.macro get_completed_combo mon:req
 	.byte 0x56
 	.byte \mon
-	ptrvalue \destination
 	.endm
 
 	.macro if_completed_combo mon:req, destination:req

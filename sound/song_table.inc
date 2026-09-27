@@ -3,7 +3,7 @@
 	.equiv MUSIC_PLAYER_SE2,2
 	.equiv MUSIC_PLAYER_SE3,3
 
-	.align 2
+	ptr_align
 
 gSongTable::
 	song mus_dummy, MUSIC_PLAYER_BGM, 0
@@ -617,6 +617,6 @@ gSongTable::
 	song ph_nurse_held, MUSIC_PLAYER_SE2, 2
 	song ph_nurse_solo, MUSIC_PLAYER_SE2, 2
 
-	.align 2
+	ptr_align
 dummy_song_header:
 	.byte 0, 0, 0, 0

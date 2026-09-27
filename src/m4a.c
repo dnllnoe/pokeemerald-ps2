@@ -282,7 +282,12 @@ void m4aMPlayImmInit(struct MusicPlayerInfo *mplayInfo)
         {
             if (track->flags & MPT_FLG_START)
             {
+#ifdef PORTABLE
+                // Clear64byte on the GBA: everything before cmdPtr, which the pointers make bigger here
+                CpuFill32(0, track, offsetof(struct MusicPlayerTrack, cmdPtr));
+#else
                 Clear64byte(track);
+#endif
                 track->flags = MPT_FLG_EXIST;
                 track->bendRange = 2;
                 track->volX = 64;
@@ -657,7 +662,12 @@ void MPlayOpen(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track
 
     soundInfo->ident++;
 
+#ifdef PORTABLE
+    // Clear64byte on the GBA, where the whole struct is 64 bytes
+    CpuFill32(0, mplayInfo, sizeof(*mplayInfo));
+#else
     Clear64byte(mplayInfo);
+#endif
 
     mplayInfo->tracks = tracks;
     mplayInfo->trackCount = trackCount;
@@ -1620,7 +1630,7 @@ cond_true:
     }
 
 cond_false:
-    track->cmdPtr += 4;
+    track->cmdPtr += sizeof(u8 *); // skip the jump target
 }
 
 void ply_xcmd(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track)
@@ -1652,13 +1662,18 @@ void ply_xwave(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track
     wav = 0;
 #endif
 
+#ifdef PORTABLE
+    // The wave pointer is pointer-sized, like the targets of GOTO and PATT
+    memcpy(&wav, track->cmdPtr, sizeof(wav));
+#else
     READ_XCMD_BYTE(wav, 0) // UB: uninitialized variable
     READ_XCMD_BYTE(wav, 1)
     READ_XCMD_BYTE(wav, 2)
     READ_XCMD_BYTE(wav, 3)
+#endif
 
     track->tone.wav = (struct WaveData *)wav;
-    track->cmdPtr += 4;
+    track->cmdPtr += sizeof(wav);
 }
 
 void ply_xtype(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track)

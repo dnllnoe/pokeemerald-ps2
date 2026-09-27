@@ -140,7 +140,8 @@ string generate_map_header_text(Json map_data, Json layouts_data) {
 	//text << ".include \"asm/macros/bit_width.inc\"\n\n";
     text << get_generated_warning("data/maps/" + mapName + "/map.json", true);
 
-    text << mapName << ":\n"
+    text << "\tptr_align\n"
+         << mapName << ":\n"
          << "\tptrvalue " << json_to_string(layout, "name") << "\n";
 
     if (map_data.object_items().find("shared_events_map") != map_data.object_items().end())
@@ -181,7 +182,8 @@ string generate_map_header_text(Json map_data, Json layouts_data) {
     if (version == "firered")
         text << "\t.byte " << json_to_string(map_data, "floor_number") << "\n";
 
-     text << "\t.byte " << json_to_string(map_data, "battle_scene") << "\n\n";
+     text << "\t.byte " << json_to_string(map_data, "battle_scene") << "\n";
+     text << "\tspace64 4\n\n"; // struct MapHeader ends with padding on 64-bit
 
     return text.str();
 }
@@ -194,7 +196,7 @@ string generate_map_connections_text(Json map_data) {
 
     ostringstream text;
     text << get_generated_warning("data/maps/" + mapName + "/map.json", true);
-    text << mapName << "_MapConnectionsList:\n";
+    text << "\tptr_align\n" << mapName << "_MapConnectionsList:\n";
 
     for (auto &connection : map_data["connections"].array_items()) {
         text << "\tconnection "
@@ -219,7 +221,7 @@ string generate_map_events_text(Json map_data) {
 
     ostringstream text;
     text << get_generated_warning("data/maps/" + mapName + "/map.json", true);
-    text << "\t.align 2\n\n";
+    text << "\tptr_align\n\n";
 
     string objects_label, warps_label, coords_label, bgs_label;
 
@@ -439,6 +441,7 @@ string generate_groups_text(Json groups_data) {
     ostringstream text;
 
     text << get_generated_warning("data/maps/map_groups.json", true);
+    text << "\tptr_align\n";
 
     for (auto &key : groups_data["group_order"].array_items()) {
         string group = json_to_string(key);
@@ -449,7 +452,7 @@ string generate_groups_text(Json groups_data) {
         text << "\n";
     }
 
-    text << "\t.align 2\n" << "gMapGroups::\n";
+    text << "\tptr_align\n" << "gMapGroups::\n";
     for (auto &group : groups_data["group_order"].array_items())
         text << "\tptrvalue " << json_to_string(group) << "\n";
     text << "\n";
@@ -606,7 +609,7 @@ string generate_layout_headers_text(Json layouts_data) {
              << "\t.incbin \"" << json_to_string(layout, "border_filepath") << "\"\n\n"
              << blockdata_label << "::\n"
              << "\t.incbin \"" << json_to_string(layout, "blockdata_filepath") << "\"\n\n"
-             << "\t.align 2\n"
+             << "\tptr_align\n"
              << layoutName << "::\n"
              << "\t.4byte " << json_to_string(layout, "width") << "\n"
              << "\t.4byte " << json_to_string(layout, "height") << "\n"
@@ -630,7 +633,7 @@ string generate_layouts_table_text(Json layouts_data) {
 
     text << get_generated_warning("data/layouts/layouts.json", true);
 
-    text << "\t.align 2\n"
+    text << "\tptr_align\n"
          << json_to_string(layouts_data, "layouts_table_label") << "::\n";
 
     for (auto &layout : layouts_data["layouts"].array_items()) {

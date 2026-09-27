@@ -104,8 +104,9 @@ extern void DmaSet(int dmaNum, const void * src, void * dest, u32 control);
 #endif
 
 #ifdef PORTABLE
-#define DmaFill16(dmaNum, value, dest, size) CpuFill16(value, dest, size)
-#define DmaFill32(dmaNum, value, dest, size) CpuFill32(value, dest, size)
+// dest may be an integer address such as VRAM, which is a uintptr_t on PC
+#define DmaFill16(dmaNum, value, dest, size) CpuFill16(value, (void *)(dest), size)
+#define DmaFill32(dmaNum, value, dest, size) CpuFill32(value, (void *)(dest), size)
 #else
 #define DmaFill16(dmaNum, value, dest, size) DMA_FILL(dmaNum, value, dest, size, 16)
 #define DmaFill32(dmaNum, value, dest, size) DMA_FILL(dmaNum, value, dest, size, 32)

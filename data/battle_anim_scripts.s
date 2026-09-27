@@ -10,11 +10,11 @@
 
 	.section script_data, "aw"
 
-	.align 2
+	ptr_align
 gMovesWithQuietBGM::
 	.short MOVE_SING, MOVE_PERISH_SONG, MOVE_GRASS_WHISTLE, 0xFFFF
 
-	.align 2
+	ptr_align
 gBattleAnims_Moves::
 	ptrvalue Move_NONE
 	ptrvalue Move_POUND
@@ -373,7 +373,7 @@ gBattleAnims_Moves::
 	ptrvalue Move_PSYCHO_BOOST
 	ptrvalue Move_COUNT /* cannot be reached, because last move is Psycho Boost*/
 
-	.align 2
+	ptr_align
 gBattleAnims_StatusConditions::
 	ptrvalue Status_Poison                    /* B_ANIM_STATUS_PSN*/
 	ptrvalue Status_Confusion                 /* B_ANIM_STATUS_CONFUSION*/
@@ -385,7 +385,7 @@ gBattleAnims_StatusConditions::
 	ptrvalue Status_Curse                     /* B_ANIM_STATUS_CURSED*/
 	ptrvalue Status_Nightmare                 /* B_ANIM_STATUS_NIGHTMARE*/
 
-	.align 2
+	ptr_align
 gBattleAnims_General::
 	ptrvalue General_CastformChange           /* B_ANIM_CASTFORM_CHANGE*/
 	ptrvalue General_StatsChange              /* B_ANIM_STATS_CHANGE*/
@@ -411,7 +411,7 @@ gBattleAnims_General::
 	ptrvalue General_IngrainHeal              /* B_ANIM_INGRAIN_HEAL*/
 	ptrvalue General_WishHeal                 /* B_ANIM_WISH_HEAL*/
 
-	.align 2
+	ptr_align
 gBattleAnims_Special::
 	ptrvalue Special_LevelUp                  /* B_ANIM_LVL_UP*/
 	ptrvalue Special_SwitchOutPlayerMon       /* B_ANIM_SWITCH_OUT_PLAYER_MON*/

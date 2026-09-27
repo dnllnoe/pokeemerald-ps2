@@ -263,7 +263,7 @@ void MP2K_event_rept(struct MP2KPlayerState *unused, struct MP2KTrack *track) {
             MP2K_event_goto(unused, track);
         } else {
             track->repeatCount = 0;
-            track->cmdPtr += sizeof(u8) + sizeof(u8 *);
+            track->cmdPtr += sizeof(u8 *); // the count was consumed above, skip the target
         }
     }
 }
@@ -391,7 +391,8 @@ void MP2KPlayerMain(void *voidPtrPlayer) {
             }
             
             if (currentTrack->status & MPT_FLG_START) {
-                CpuFill32(0, currentTrack, 0x40);
+                // 0x40 bytes on the GBA: everything before cmdPtr, which the pointers make bigger here
+                CpuFill32(0, currentTrack, offsetof(struct MP2KTrack, cmdPtr));
                 currentTrack->status = MPT_FLG_EXIST;
                 currentTrack->bendRange = 2;
                 currentTrack->volPublic = 64;

@@ -21,7 +21,11 @@ struct Task
     TaskFunc followupFunc;
     union {
         void *genericPtr[2];
+#ifdef PORTABLE
+        uintptr_t intPtr[NUM_TASK_DATA]; // indexed like data[] by Set/GetWordTaskArg
+#else
         uintptr_t intPtr[2];
+#endif
         void (*funcPtr)(void);
         TaskFunc funcPtr_task;
         struct Sprite *spritePtr;

@@ -3,7 +3,7 @@
 
 	.section script_data, "aw"
 
-	.align 2
+	ptr_align
 gFieldEffectScriptPointers::
 	ptrvalue gFieldEffectScript_ExclamationMarkIcon1      /* FLDEFF_EXCLAMATION_MARK_ICON*/
 	ptrvalue gFieldEffectScript_UseCutOnTallGrass         /* FLDEFF_USE_CUT_ON_GRASS*/

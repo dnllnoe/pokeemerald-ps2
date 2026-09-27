@@ -21,7 +21,7 @@
 	.endif
 
 	.macro voice_group label:req, starting_note
-	.align 2
+	ptr_align
 	.ifb \starting_note
 		.global voicegroup_\label 
 		voicegroup_\label:

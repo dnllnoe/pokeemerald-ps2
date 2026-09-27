@@ -1,7 +1,7 @@
 	.include "asm/macros/bit_width.inc"
 	.section script_data, "aw"
 
-	.align 2
+	ptr_align
 gMysteryEventScriptCmdTable::
 	ptrvalue MEScrCmd_nop                 /* 0x00*/
 	ptrvalue MEScrCmd_checkcompat         /* 0x01*/

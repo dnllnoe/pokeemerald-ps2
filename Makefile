@@ -127,6 +127,14 @@ ifeq ($(PORTABLE),1)
     OS_CFLAGS :=
     OS_LFLAGS := -lwinmm -lxinput
     BUILD_FEXTENSION := .exe
+  else ifeq ($(IS64BIT),1)
+    # Build position independent, so nothing can rely on addresses fitting in 32 bits
+    OS_CFLAGS := -fPIE
+    OS_LFLAGS := -pie -Wl,-z,text
+    # Assembled data holds absolute pointers that get relocated at load time.
+    # Keep it in .data.rel.ro (read-only once relocated) rather than .rodata,
+    # which would need text relocations.
+    FIX_UNDERSCORE += --rename-section .rodata=.data.rel.ro,alloc,load,contents,data
   else
     OS_CFLAGS :=
     OS_LFLAGS := -no-pie
@@ -246,7 +254,7 @@ else ifeq ($(PORTABLE),1)
   PATH_MODERNCC := PATH="$(PATH)" $(MODERNCC)
   CPP := $(PREFIX)cpp -m$(BIT_WIDTH)
   CC1 	:= $(shell $(PREFIX)gcc --print-prog-name=cc1) -quiet
-  override CFLAGS += $(OS_CFLAGS) $(PLATFORM_CFLAGS) -Werror=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-trigraphs -Wimplicit -Wparentheses -Wunused -m$(BIT_WIDTH) -std=gnu99 $(LEADING_UNDERSCORE_FLAG) -fno-dce -fno-builtin -Wno-unused-function -DPORTABLE -DNONMATCHING -D UBFIX -DMODERN=$(MODERN)
+  override CFLAGS += $(OS_CFLAGS) $(PLATFORM_CFLAGS) -Werror=implicit-function-declaration -Wno-error=incompatible-pointer-types -Werror=int-conversion -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast -Wno-trigraphs -Wimplicit -Wparentheses -Wunused -m$(BIT_WIDTH) -std=gnu99 $(LEADING_UNDERSCORE_FLAG) -fno-dce -fno-builtin -Wno-unused-function -DPORTABLE -DNONMATCHING -D UBFIX -DMODERN=$(MODERN)
   LIB := $(LIBPATH) -lgcc -lc
 else
   # Note: The makefile must be set up to not call these if modern == 0

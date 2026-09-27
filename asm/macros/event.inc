@@ -1219,7 +1219,7 @@
 	/* If 'disable' is set to anything but 0 then this command does nothing.*/
 	.macro addmoney value:req, disable=0
 	.byte SCR_OP_ADDMONEY
-	ptrvalue \value
+	.int \value
 	.byte \disable
 	.endm
 
@@ -1227,7 +1227,7 @@
 	/* If 'disable' is set to anything but 0 then this command does nothing.*/
 	.macro removemoney value:req, disable=0
 	.byte SCR_OP_REMOVEMONEY
-	ptrvalue \value
+	.int \value
 	.byte \disable
 	.endm
 
@@ -1235,7 +1235,7 @@
 	/* If 'disable' is set to anything but 0 then this command does nothing.*/
 	.macro checkmoney value:req, disable=0
 	.byte SCR_OP_CHECKMONEY
-	ptrvalue \value
+	.int \value
 	.byte \disable
 	.endm
 
