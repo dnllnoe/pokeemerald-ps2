@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
+#define NOMINMAX // global.h has its own
 #include <windows.h>
 
 #ifdef xinputkeys
@@ -49,13 +50,11 @@ bool drawingEnabled = true;
 static HANDLE sSaveFile = NULL;
 
 extern void AgbMain(void);
-extern void MainLoop(void);
-extern void DoSoftReset(void);
 
 DWORD WINAPI DoMain(LPVOID lpParam);
 void VDraw();
 
-static void ReadSaveFile(char *path);
+static void ReadSaveFile(const char *path);
 static void StoreSaveFile(void);
 static void CloseSaveFile(void);
 static void UpdateInternalClock(void);
@@ -151,9 +150,7 @@ void AddMenus(HWND hwnd) {
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    int wmId, wmEvent;
     PAINTSTRUCT ps;
-    HDC hdc;
 
     switch (message)
     {
@@ -161,7 +158,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         AddMenus(hWnd);
         break;
     case WM_PAINT:
-        hdc = BeginPaint(hWnd, &ps);
+        BeginPaint(hWnd, &ps);
         //OnPaint(hdc);
         EndPaint(hWnd, &ps);
         break;
@@ -256,7 +253,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
             break;
         case IDM_RESETGAME:
-            DoSoftReset();
+            RequestSoftReset();
             break;
         case IDM_PAUSEGAME:
             if (!paused){
@@ -341,7 +338,6 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-    HWND hWnd;
     RECT winSize = {0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT};
 
     hInst = hInstance; // Store instance handle in our global variable
@@ -379,7 +375,7 @@ void win32CreateBitmap()
     bmi.bmiHeader.biCompression = BI_RGB;
 
     HBITMAP hbm = CreateDIBSection(hdc_bmp, &bmi, DIB_RGB_COLORS, (void**)&lpBitmapBits, NULL, NULL);
-    HGDIOBJ oldbmp = SelectObject(hdc_bmp, hbm); 
+    SelectObject(hdc_bmp, hbm);
 }
 
 //for fps counter, does not handle negative numbers
@@ -416,11 +412,16 @@ int main(int argc, char **argv)
 {
     LARGE_INTEGER largeint;
     MSG msg;
-    HACCEL hAccelTable;
     HINSTANCE hInstance = GetModuleHandle(NULL);
     int nCmdShow = 1;
     DBGPRINTF("Game launch main()\n");
     ReadSaveFile(savePath);
+
+    // Before AgbMain, whose RtcInit reads it
+    memset(&internalClock, 0, sizeof(internalClock));
+    internalClock.status = SIIRTCINFO_24HOUR;
+    UpdateInternalClock();
+    DBGPRINTF("Clock init done!\n");
     MyRegisterClass(hInstance);
 
     // Perform application initialization:
@@ -441,18 +442,12 @@ int main(int argc, char **argv)
 
     DBGPRINTF("Event Init done!\n");
 
-    cgb_audio_init(42048);
+    cgb_audio_init(AUDIO_SAMPLE_RATE);
     DBGPRINTF("cgb_audio_init Init done!\n");
     
     AgbMain();
 
     double accumulator = 0.0;
-
-    memset(&internalClock, 0, sizeof(internalClock));
-    internalClock.status = SIIRTCINFO_24HOUR;
-    UpdateInternalClock();
-
-    DBGPRINTF("Clock init done!\n");
 
     unsigned int fpsseconds = GetTickCount()+1000;
     bool isGameStepDrawn = false;
@@ -486,7 +481,12 @@ int main(int argc, char **argv)
 			{
 				//run game logic, draw frame and process DMAs and vblank
 				ENTER_VBLANK(); //you must be in VBlank before running a game tick
-				MainLoop();
+				if (!RunMainLoop())
+				{
+					// After a soft reset, the next frame starts with MainLoop, like at startup
+					accumulator -= fixedTimestep;
+					continue;
+				}
 				if (!isGameStepDrawn)
 				{
 					VDraw();
@@ -504,7 +504,6 @@ int main(int argc, char **argv)
 			if (GetTickCount() > fpsseconds)
 			{
 				char titlebar[128] = {0};
-				char fpscount[10] = {0};
 				memcpy(titlebar, "win32 emerald fps:  ", sizeof("win32 emerald fps: "));
 				intToStr(&titlebar[sizeof("win32 emerald fps: ")-1], framesDrawn, 10);
 				SetWindowTextA(ghwnd, titlebar);
@@ -526,9 +525,9 @@ int main(int argc, char **argv)
     return 0;
 }
 
-static void ReadSaveFile(char *path)
+static void ReadSaveFile(const char *path)
 {
-    int bytesRead;
+    DWORD bytesRead;
     // Check whether the saveFile exists, and create it if not
     sSaveFile = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (sSaveFile == INVALID_HANDLE_VALUE)
@@ -574,7 +573,7 @@ void Platform_StoreSaveFile(void)
 
 void Platform_ReadFlash(u16 sectorNum, u32 offset, u8 *dest, u32 size)
 {
-    int bytesRead;
+    DWORD bytesRead;
     DBGPRINTF("ReadFlash(sectorNum=0x%04X,offset=0x%08X,size=0x%02X)\n",sectorNum,offset,size);
     HANDLE savefile = CreateFileA(savePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL); 
     if (savefile == INVALID_HANDLE_VALUE)
@@ -685,7 +684,7 @@ void VDraw()
 
         //convert pixels to to the correct format
         uint32_t* bitmap32 = (uint32_t*)lpBitmapBits; //cast to 32bit so we could convert two pixels at once
-        while (bitmap32 != &lpBitmapBits[DISPLAY_HEIGHT * DISPLAY_WIDTH])
+        while (bitmap32 != (uint32_t *)&lpBitmapBits[DISPLAY_HEIGHT * DISPLAY_WIDTH])
         {
             uint32_t color32 = *bitmap32;
             *bitmap32 = ((color32 & 0x1F001F) << 10) | (color32 & 0x83E083E0) | ((color32 & 0x7C007C00) >> 10);
@@ -745,8 +744,8 @@ static void UpdateInternalClock(void)
     SYSTEMTIME time;
     GetLocalTime(&time);
 
-    internalClock.year = BinToBcd(time.wYear - 100);
-    internalClock.month = BinToBcd(time.wMonth-1) + 1;
+    internalClock.year = BinToBcd(time.wYear - 2000);
+    internalClock.month = BinToBcd(time.wMonth);
     internalClock.day = BinToBcd(time.wDay);
     internalClock.dayOfWeek = BinToBcd(time.wDayOfWeek);
     internalClock.hour = BinToBcd(time.wHour);
@@ -804,13 +803,7 @@ void Platform_SetTime(struct SiiRtcInfo *rtc)
 
 void Platform_SetAlarm(u8 *alarmData)
 {
-    // TODO
-}
-
-void SoftReset(u32 resetFlags)
-{
-    puts("Soft Reset called. Exiting.");
-    ExitProcess(0);
+    // The game never sets an alarm
 }
 
 #endif

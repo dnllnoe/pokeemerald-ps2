@@ -4,12 +4,64 @@
 #include "gba/types.h"
 #include "gba/m4a_internal.h"
 #include "platform.h"
+#include <stddef.h>
 
 // Don't uncomment this. vvvvv
 // #define POKEMON_EXTENSIONS
 #define MIXED_AUDIO_BUFFER_SIZE 4907
 
-static u32 MidiKeyToFreq(struct WaveData2 *wav, u8 key, u8 pitch);
+// The player and mixer here and the m4a code in m4a.c use different structs for the
+// same memory, so they have to keep the same layout.
+#define SAME_SIZE(a, b) STATIC_ASSERT(sizeof(struct a) == sizeof(struct b), sSameSize_##a)
+#define SAME_OFFSET(a, fieldA, b, fieldB) \
+    STATIC_ASSERT(offsetof(struct a, fieldA) == offsetof(struct b, fieldB), sSameOffset_##a##_##fieldA)
+SAME_SIZE(SoundMixerState, SoundInfo);
+SAME_OFFSET(SoundMixerState, chans, SoundInfo, chans);
+SAME_OFFSET(SoundMixerState, outBuffer, SoundInfo, pcmBuffer);
+SAME_SIZE(MixerSource, SoundChannel);
+SAME_OFFSET(MixerSource, wav, SoundChannel, wav);
+SAME_OFFSET(MixerSource, track, SoundChannel, track);
+SAME_SIZE(MP2KPlayerState, MusicPlayerInfo);
+SAME_OFFSET(MP2KPlayerState, tracks, MusicPlayerInfo, tracks);
+SAME_SIZE(MP2KTrack, MusicPlayerTrack);
+SAME_OFFSET(MP2KTrack, chan, MusicPlayerTrack, chan);
+SAME_OFFSET(MP2KTrack, cmdPtr, MusicPlayerTrack, cmdPtr);
+SAME_SIZE(MP2KInstrument, ToneData);
+SAME_OFFSET(WaveData2, freq, WaveData, freq);
+SAME_OFFSET(WaveData2, data, WaveData, data);
+
+u32 MidiKeyToFreq(struct WaveData *wav, u8 key, u8 fineAdjust);
+
+extern struct MusicPlayerTrack gMPlayTrack_BGM[10];
+extern struct MusicPlayerTrack gMPlayTrack_SE1[3];
+extern struct MusicPlayerTrack gMPlayTrack_SE2[9];
+extern struct MusicPlayerTrack gMPlayTrack_SE3[1];
+
+// When two notes of the same priority want a channel, ply_note on the GBA lets
+// the one whose track comes first in memory have it. The GBA has the tracks in
+// this order: BGM, SE1, SE2, SE3 (sound/music_player_table.inc), then the cries'.
+// Here the compiler puts the arrays wherever it likes, so notes get compared by
+// their track's place in that order instead of by address. No track comes first.
+static int TrackOrder(const struct MP2KTrack *track) {
+    static const struct { const struct MusicPlayerTrack *tracks; int count; } sTrackArrays[] = {
+        {gMPlayTrack_BGM, ARRAY_COUNT(gMPlayTrack_BGM)},
+        {gMPlayTrack_SE1, ARRAY_COUNT(gMPlayTrack_SE1)},
+        {gMPlayTrack_SE2, ARRAY_COUNT(gMPlayTrack_SE2)},
+        {gMPlayTrack_SE3, ARRAY_COUNT(gMPlayTrack_SE3)},
+        {gPokemonCryTracks, MAX_POKEMON_CRIES * 2},
+    };
+    const struct MusicPlayerTrack *t = (const struct MusicPlayerTrack *)track;
+    int order = 0;
+
+    if (track == NULL)
+        return -1;
+    for (size_t i = 0; i < ARRAY_COUNT(sTrackArrays); i++) {
+        if (t >= sTrackArrays[i].tracks && t < sTrackArrays[i].tracks + sTrackArrays[i].count)
+            return order + (t - sTrackArrays[i].tracks);
+        order += sTrackArrays[i].count;
+    }
+    return order;
+}
 void ChnVolSetAsm(struct MixerSource *chan, struct MP2KTrack *track);
 float *cgb_get_buffer();
 extern void * const gMPlayJumpTableTemplate[];
@@ -103,7 +155,7 @@ static struct MP2KInstrument *SafeDereferenceMP2KInstrumentPtr(struct MP2KInstru
     return ret;
 }
 
-static void *SafeDereferenceVoidPtr(void **addr) {
+static void *SafeDereferenceVoidPtr(void *const *addr) {
     void *ret = *addr;
     VERIFY_PTR(addr);
     return ret;
@@ -192,15 +244,14 @@ u8 ConsumeTrackByte(struct MP2KTrack *track) {
     return SafeDereferenceU8(ptr);
 }
 
-void MPlayJumpTableCopy(void **mplayJumpTable) {
+void MPlayJumpTableCopy(MPlayFunc *mplayJumpTable) {
     for (uf8 i = 0; i < 36; i++) {
-        mplayJumpTable[i] = SafeDereferenceVoidPtr(&gMPlayJumpTableTemplate[i]);
+        mplayJumpTable[i] = (MPlayFunc)SafeDereferenceVoidPtr(&gMPlayJumpTableTemplate[i]);
     }
 }
 
 // Ends the current track. (Fine as in the Italian musical word, not English)
 void MP2K_event_fine(struct MP2KPlayerState *unused, struct MP2KTrack *track) {
-    struct MP2KTrack *r5 = track;
     for (struct MixerSource *chan = track->chan; chan != NULL; chan = chan->next) {
         if (chan->status & 0xC7) {
             chan->status |= 0x40;
@@ -347,7 +398,7 @@ void MP2K_event_port(struct MP2KPlayerState *unused, struct MP2KTrack *track) {
 
 void MP2KPlayerMain(void *voidPtrPlayer) {
     struct MP2KPlayerState *player = (struct MP2KPlayerState *)voidPtrPlayer;
-    struct SoundMixerState *mixer = SOUND_INFO_PTR;
+    struct SoundMixerState *mixer = (struct SoundMixerState *)SOUND_INFO_PTR;
 
     player->hasBeenRanOnce = TRUE;
 
@@ -479,7 +530,7 @@ void MP2KPlayerMain(void *voidPtrPlayer) {
         if ((track->status & MPT_FLG_EXIST) == 0 || (track->status & 0xF) == 0) {
             continue;
         }
-        TrkVolPitSet(player, track);
+        TrkVolPitSet((struct MusicPlayerInfo *)player, (struct MusicPlayerTrack *)track);
         for (struct MixerSource *chan = track->chan; chan != NULL; chan = chan->next) {
             if ((chan->status & 0xC7) == 0) {
                 ClearChain(chan);
@@ -512,13 +563,14 @@ returnEarly: ;
     player->lockStatus = PLAYER_UNLOCKED;
 }
 
-void TrackStop(struct MP2KPlayerState *player, struct MP2KTrack *track) {
+void TrackStop(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *mplayTrack) {
+    struct MP2KTrack *track = (struct MP2KTrack *)mplayTrack;
     if (track->status & 0x80) {
         for (struct MixerSource *chan = track->chan; chan != NULL; chan = chan->next) {
             if (chan->status != 0) {
                 u8 cgbType = chan->type & 0x7;
                 if (cgbType != 0) {
-                    struct SoundMixerState *mixer = SOUND_INFO_PTR;
+                    struct SoundMixerState *mixer = (struct SoundMixerState *)SOUND_INFO_PTR;
                     mixer->cgbNoteOffFunc(cgbType);
                 }
                 chan->status = 0;
@@ -545,7 +597,7 @@ void ChnVolSetAsm(struct MixerSource *chan, struct MP2KTrack *track) {
 }
 
 void MP2K_event_nxx(u8 clock, struct MP2KPlayerState *player, struct MP2KTrack *track) { // ply_note
-    struct SoundMixerState *mixer = SOUND_INFO_PTR;
+    struct SoundMixerState *mixer = (struct SoundMixerState *)SOUND_INFO_PTR;
     
     // A note can be anywhere from 1 to 4 bytes long. First is always the note length...
     track->gateTime = gClockTable[clock];
@@ -610,7 +662,7 @@ void MP2K_event_nxx(u8 clock, struct MP2KPlayerState *player, struct MP2KTrack *
         if ((chan->status & SOUND_CHANNEL_SF_ON) 
         && (chan->status & SOUND_CHANNEL_SF_STOP) == 0) {
             // then make sure this note is higher priority (or same priority but from a later track).
-            if (chan->priority > priority || (chan->priority == priority && chan->track < track)) {
+            if (chan->priority > priority || (chan->priority == priority && TrackOrder(chan->track) < TrackOrder(track))) {
                 return;
             }
         }
@@ -643,7 +695,7 @@ void MP2K_event_nxx(u8 clock, struct MP2KPlayerState *player, struct MP2KTrack *
                     p = currChan->priority;
                     t = currChan->track;
                     chan = currChan;
-                } else if (currChan->priority == p && currChan->track > t) {
+                } else if (currChan->priority == p && TrackOrder(currChan->track) > TrackOrder(t)) {
                     t = currChan->track;
                     chan = currChan;
                 } else if (currChan->priority == p && currChan->track == t) {
@@ -669,9 +721,9 @@ void MP2K_event_nxx(u8 clock, struct MP2KPlayerState *player, struct MP2KTrack *
     
     track->lfoDelayCounter = track->lfoDelay;
     if (track->lfoDelay != 0) {
-        ClearModM(track);
+        ClearModM((struct MusicPlayerTrack *)track);
     }
-    TrkVolPitSet(player, track);
+    TrkVolPitSet((struct MusicPlayerInfo *)player, (struct MusicPlayerTrack *)track);
     
     chan->gateTime = track->gateTime;
     chan->untransposedKey = track->key;
@@ -739,20 +791,20 @@ void MP2K_event_endtie(struct MP2KPlayerState *unused, struct MP2KTrack *track) 
 void MP2K_event_lfos(struct MP2KPlayerState *unused, struct MP2KTrack *track) {
     track->lfoSpeed = *(track->cmdPtr++);
     if (track->lfoSpeed == 0) {
-        ClearModM(track);
+        ClearModM((struct MusicPlayerTrack *)track);
     }
 }
 
 void MP2K_event_mod(struct MP2KPlayerState *unused, struct MP2KTrack *track) {
     track->modDepth = *(track->cmdPtr++);
     if (track->modDepth == 0) {
-        ClearModM(track);
+        ClearModM((struct MusicPlayerTrack *)track);
     }
 }
 
 void m4aSoundVSync(void)
 {
-    struct SoundMixerState *mixer = SOUND_INFO_PTR;
+    struct SoundMixerState *mixer = (struct SoundMixerState *)SOUND_INFO_PTR;
 #ifdef PORTABLE
     if(mixer->lockStatus-PLAYER_UNLOCKED <= 1)
     {

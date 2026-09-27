@@ -197,7 +197,7 @@ static void Task_HandleMultichoiceInput(u8 taskId)
 
 bool8 ScriptMenu_YesNo(u8 left, u8 top)
 {
-    u8 taskId;
+    u8 UNUSED taskId;
 
     if (FuncIsActiveTask(Task_HandleYesNoInput) == TRUE)
     {

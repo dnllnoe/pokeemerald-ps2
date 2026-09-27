@@ -3,6 +3,8 @@
 
 #define MIXED_AUDIO_BUFFER_SIZE 4907
 
+// The state of the emulated Game Boy sound channels: two squares (the first
+// with sweep), the wave channel and noise
 struct AudioCGB{
     u16 ch1Freq;
     u8 ch1SweepCounter;
@@ -11,15 +13,18 @@ struct AudioCGB{
     u8 ch1SweepShift;
     u8 Vol[4];
     u8 VolI[4];
-    u8 Len[4];
-    u8 LenI[4];
+    u16 Len[4];
     bool8 LenOn[4];
     u8 EnvCounter[4];
     u8 EnvCounterI[4];
     bool8 EnvDir[4];
     bool8 DAC[4];
-    float WAVRAM[32];
-    u16 ch4LFSR [2];
+    u8 wave[32];           // the wave channel's 4-bit samples
+    u32 timer[4];          // CPU cycles until each channel's next step
+    u8 position[3];        // the step of the squares' duty cycles, and of the wave
+    u16 lfsr;              // the noise channel's shift register
+    u8 sequencerSamples;   // samples until the next step of the 512 Hz frame sequencer
+    u8 sequencerStep;
     __attribute__((aligned(4))) float outBuffer[MIXED_AUDIO_BUFFER_SIZE * 2];
 };
 

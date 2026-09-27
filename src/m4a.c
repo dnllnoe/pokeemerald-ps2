@@ -1313,6 +1313,10 @@ void CgbSound(void)
         /* 4. apply envelope & volume to HW registers */
         if (channels->modify & CGB_CHANNEL_MO_VOL)
         {
+            #ifdef PORTABLE
+                // The wave channel is only restarted when its note starts
+                bool32 triggered = (ch != 3 || (channels->n4 & 0x80));
+            #endif
             REG_NR51 = (REG_NR51 & ~channels->panMask) | channels->pan;
             if (ch == 3)
             {
@@ -1335,7 +1339,8 @@ void CgbSound(void)
             #ifdef PORTABLE
                 cgb_set_envelope(ch - 1, *nrx2ptr);
                 cgb_toggle_length(ch - 1, (*nrx4ptr & 0x40));
-                cgb_trigger_note(ch - 1);
+                if (triggered)
+                    cgb_trigger_note(ch - 1);
             #endif
         }
 

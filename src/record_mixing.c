@@ -764,9 +764,9 @@ static void ReceiveDaycareMailData(struct RecordMixingDaycareMail *records, size
     struct RecordMixingDaycareMail *mixMail;
     u8 playerSlot1, playerSlot2;
     void *ptr;
-    u8 unusedArr1[MAX_LINK_PLAYERS];
-    u8 unusedArr2[MAX_LINK_PLAYERS];
-    struct RecordMixingDaycareMail *unusedMixMail[MAX_LINK_PLAYERS];
+    u8 UNUSED unusedArr1[MAX_LINK_PLAYERS];
+    u8 UNUSED unusedArr2[MAX_LINK_PLAYERS];
+    struct RecordMixingDaycareMail UNUSED *unusedMixMail[MAX_LINK_PLAYERS];
     bool8 canHoldItem[MAX_LINK_PLAYERS][DAYCARE_MON_COUNT];
     u8 idxs[MAX_LINK_PLAYERS][2];
     u8 numDaycareCanHold;

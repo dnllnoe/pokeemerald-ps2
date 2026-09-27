@@ -71,7 +71,12 @@ void SetSaveBlocksPointers(u16 offset)
 {
     struct SaveBlock1 **sav1_LocalVar = &gSaveBlock1Ptr;
 
+#ifdef PORTABLE
+    // Keep the save blocks 8-byte aligned, for their pointers
+    offset = (offset + Random()) & (SAVEBLOCK_MOVE_RANGE - 8);
+#else
     offset = (offset + Random()) & (SAVEBLOCK_MOVE_RANGE - 4);
+#endif
 
     gSaveBlock2Ptr = (void *)(&gSaveblock2) + offset;
     *sav1_LocalVar = (void *)(&gSaveblock1) + offset;

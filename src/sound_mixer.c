@@ -18,8 +18,21 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
 void GeneratePokemonSampleAudio(struct SoundMixerState *mixer, struct MixerSource *chan, s8 *current, float *outBuffer, u16 samplesPerFrame, float sampleRateReciprocal, s32 samplesLeftInWav, signed envR, signed envL, s32 loopLen);
 static s8 sub_82DF758(struct MixerSource *chan, u32 current);
 
+// Emerald mixes its sound at 13379 Hz on the GBA (SOUND_MODE_FREQ_13379), and the
+// samples of fixed-frequency instruments, like most of the drums, play at that
+// rate: one sample for each sample of output. The PC mixes at a higher rate, so
+// it steps through them more slowly, or they'd play three times too fast.
+#define GBA_MIXING_RATE 13379.0f
+
+static inline float SamplesPerOutputSample(const struct MixerSource *chan, float sampleRateReciprocal)
+{
+    if (chan->type & 8)
+        return GBA_MIXING_RATE * sampleRateReciprocal;
+    return chan->freq * sampleRateReciprocal;
+}
+
 void RunMixerFrame(void) {
-    struct SoundMixerState *mixer = SOUND_INFO_PTR;
+    struct SoundMixerState *mixer = (struct SoundMixerState *)SOUND_INFO_PTR;
     
     if (mixer->lockStatus != MIXER_UNLOCKED) {
         return;
@@ -95,7 +108,7 @@ void SampleMixer(struct SoundMixerState *mixer, u32 scanlineLimit, u16 samplesPe
     struct MixerSource *chan = mixer->chans;
     
     for (int i = 0; i < numChans; i++, chan++) {
-        struct WaveData2 *wav = chan->wav;
+        struct WaveData2 *wav = (struct WaveData2 *)chan->wav;
         
         if (scanlineLimit != 0) {
             uf16 vcount = REG_VCOUNT;
@@ -115,6 +128,18 @@ void SampleMixer(struct SoundMixerState *mixer, u32 scanlineLimit, u16 samplesPe
     }
 returnEarly:
     mixer->lockStatus = MIXER_UNLOCKED;
+}
+
+// A note that fades to its echo volume (on release, or decaying with no sustain)
+// stays at that volume for a while as a pseudo-echo, or stops without one
+static inline bool32 StartEcho(struct MixerSource *chan) {
+    chan->envelopeVol = chan->echoVol;
+    if (chan->echoVol == 0) {
+        chan->status = 0;
+        return FALSE;
+    }
+    chan->status |= 4;
+    return TRUE;
 }
 
 // Returns TRUE if channel is still active after moving envelope forward a frame
@@ -141,27 +166,20 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
         env = chan->envelopeVol;
         
         if (status & 4) {
-            // Note-wise echo
-            --chan->echoVol;
-            if (chan->echoVol <= 0) {
+            // Note-wise echo: the note stays at the echo volume for echoLen frames
+            u8 length = chan->echoLen--;
+            if (length <= 1) {
                 chan->status = 0;
                 return FALSE;
-            } else {
-                return TRUE;
             }
+            return TRUE;
         } else if (status & 0x40) {
             // Release
             chan->envelopeVol = env * chan->release / 256U;
-            u8 echoVol = chan->echoVol;
-            if (chan->envelopeVol > echoVol) {
-                return TRUE;
-            } else if (echoVol == 0) {
-                chan->status = 0;
-                return FALSE;
-            } else {
-                chan->status |= 4;
+            if (chan->envelopeVol > chan->echoVol) {
                 return TRUE;
             }
+            return StartEcho(chan);
         }
         
         switch (status & 3) {
@@ -172,14 +190,7 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
             
             u8 sustain = chan->sustain;
             if (chan->envelopeVol <= sustain && sustain == 0) {
-                // Duplicated echo check from Release section above
-                if (chan->echoVol == 0) {
-                    chan->status = 0;
-                    return FALSE;
-                } else {
-                    chan->status |= 4;
-                    return TRUE;
-                }
+                return StartEcho(chan);
             } else if (chan->envelopeVol <= sustain) {
                 chan->envelopeVol = sustain;
                 --chan->status;
@@ -188,7 +199,8 @@ static inline bool32 TickEnvelope(struct MixerSource *chan, struct WaveData2 *wa
         case 3:
         attack:
             newEnv = env + chan->attack;
-            if (newEnv > 0xFF) {
+            // Reaching 255 ends the attack, like SoundMainRAM's "cmp r5, 0xFF; bcc"
+            if (newEnv >= 0xFF) {
                 chan->envelopeVol = 0xFF;
                 --chan->status;
             } else {
@@ -246,28 +258,9 @@ static inline void GenerateAudio(struct SoundMixerState *mixer, struct MixerSour
     }
     else
 #endif
-    if (chan->type & 8) {
-        for (u16 i = 0; i < samplesPerFrame; i++, outBuffer+=2) {
-            sf8 c = *(current++);
-            
-            outBuffer[1] += (c * envR) / 32768.0f;
-            outBuffer[0] += (c * envL) / 32768.0f;
-            if (--samplesLeftInWav == 0) {
-                samplesLeftInWav = loopLen;
-                if (loopLen != 0) {
-                    current = loopStart;
-                } else {
-                    chan->status = 0;
-                    return;
-                }
-            }
-        }
-        
-        chan->ct = samplesLeftInWav;
-        chan->current = current;
-    } else {
+    {
         float finePos = chan->fw;
-        float romSamplesPerOutputSample = chan->freq * sampleRateReciprocal;
+        float romSamplesPerOutputSample = SamplesPerOutputSample(chan, sampleRateReciprocal);
 
         sf16 b = current[0];
         sf16 m = current[1] - b;
@@ -341,7 +334,7 @@ void GeneratePokemonSampleAudio(struct SoundMixerState *mixer, struct MixerSourc
             chan->current = current;
         }
     }
-    float romSamplesPerOutputSample = chan->type & 8 ? 1.0f : chan->freq * sampleRateReciprocal;
+    float romSamplesPerOutputSample = SamplesPerOutputSample(chan, sampleRateReciprocal);
     if(wav->type != 0) { // is compressed
         chan->blockCount = 0xFF000000;
         if(chan->type & 0x10) { // is reverse

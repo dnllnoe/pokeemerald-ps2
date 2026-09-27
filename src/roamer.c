@@ -193,7 +193,7 @@ bool8 IsRoamerAt(u8 mapGroup, u8 mapNum)
 
 void CreateRoamerMonInstance(void)
 {
-    u32 status;
+    u32 UNUSED status;
     struct Pokemon *mon = &gEnemyParty[0];
     ZeroEnemyPartyMons();
     CreateMonWithIVsPersonality(mon, ROAMER->species, ROAMER->level, ROAMER->ivs, ROAMER->personality);

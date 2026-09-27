@@ -1369,7 +1369,12 @@ static void LoadMonIconGfx(void)
 {
     u8 i;
 
+#ifdef UBFIX
+    // There are only 3 icon palettes, not PARTY_SIZE (see gMonIconPaletteTable)
+    CpuSet(gMonIconPalettes, sData->monIconPal, 3 * 16);
+#else
     CpuSet(gMonIconPalettes, sData->monIconPal, 0x60);
+#endif
     switch (sData->trainerCard.monIconTint)
     {
     case MON_ICON_TINT_NORMAL:

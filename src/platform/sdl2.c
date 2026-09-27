@@ -5,8 +5,8 @@
 #include <time.h>
 
 #ifdef _WIN32
+#define NOMINMAX // global.h has its own
 #include <windows.h>
-#include <xinput.h>
 #endif
 
 #include <SDL2/SDL.h>
@@ -20,7 +20,9 @@
 #include "gba/flash_internal.h"
 #include "platform/dma.h"
 #include "platform/framedraw.h"
+#include "platform/settings.h"
 #include "platform/system.h"
+#include "platform/test_state.h"
 
 extern void (*const gIntrTable[])(void);
 
@@ -43,7 +45,9 @@ double timeScale = 1.0;
 struct SiiRtcInfo internalClock;
 
 static FILE *sSaveFile = NULL;
-static const char *sSavePath = "pokeemerald.sav";
+static const char *sSavePath;
+static const char *sSettingsPath;
+static char *sDataDir;
 
 // Headless test mode, see RunTestMode()
 static bool sTestMode = false;
@@ -54,10 +58,10 @@ static u32 sTestShotEvery;
 static time_t sTestClockBase = 1767268800; // 2026-01-01 12:00:00 UTC
 static u32 sTestFrame;
 static u64 sTestAudioHash;
+static FILE *sTestAudio;
+static FILE *sTestState;
 
 extern void AgbMain(void);
-extern void MainLoop(void);
-extern void DoSoftReset(void);
 
 int DoMain(void *param);
 void ProcessEvents(void);
@@ -67,35 +71,68 @@ static void ReadSaveFile(const char *path);
 static void StoreSaveFile(void);
 static void CloseSaveFile(void);
 
+static void InitInternalClock(void);
 static void UpdateInternalClock(void);
 
 static bool ParseArgs(int argc, char **argv);
+static void WriteWavHeader(FILE *file, u32 dataSize);
+static void FindDataFiles(void);
+static void ToggleFullscreen(void);
 static int RunTestMode(void);
 
 int main(int argc, char **argv)
 {
-    // Open an output console on Windows
-#ifdef _WIN32
-    AllocConsole() ;
-    AttachConsole( GetCurrentProcessId() ) ;
-    freopen( "CON", "w", stdout ) ;
-#endif
-
     if (!ParseArgs(argc, argv))
         return 1;
 
+    // Open an output console on Windows. The test mode keeps stdout, which the
+    // headless tests can read the game's state from.
+#ifdef _WIN32
+    if (!sTestMode)
+    {
+        AllocConsole() ;
+        AttachConsole( GetCurrentProcessId() ) ;
+        freopen( "CON", "w", stdout ) ;
+    }
+#endif
+
+    // The test mode only uses files it's given, apart from the save
+    if (!sTestMode)
+        FindDataFiles();
+    else if (sSavePath == NULL)
+        sSavePath = "pokeemerald.sav";
+    LoadSettings(sSettingsPath);
     ReadSaveFile(sSavePath);
+    // Before AgbMain, whose RtcInit reads it
+    InitInternalClock();
 
     if (sTestMode)
         return RunTestMode();
 
-    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
+    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0)
     {
         DBGPRINTF("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 1;
     }
 
-    sdlWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    // Mappings for controllers SDL doesn't know, from https://github.com/mdqinc/SDL_GameControllerDB
+    {
+        char path[1024];
+        FILE *mappings;
+
+        snprintf(path, sizeof(path), "%sgamecontrollerdb.txt", sDataDir);
+        mappings = fopen(path, "r");
+        if (mappings != NULL)
+        {
+            fclose(mappings);
+            if (SDL_GameControllerAddMappingsFromFile(path) < 0)
+                fprintf(stderr, "Could not read %s: %s\n", path, SDL_GetError());
+        }
+    }
+
+    videoScale = gSettings.scale;
+    sdlWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale,
+                                 SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | (gSettings.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     if (sdlWindow == NULL)
     {
         DBGPRINTF("Window could not be created! SDL_Error: %s\n", SDL_GetError());
@@ -113,6 +150,8 @@ int main(int argc, char **argv)
     SDL_RenderClear(sdlRenderer);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     SDL_RenderSetLogicalSize(sdlRenderer, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    // Whole pixels only, with borders in fullscreen
+    SDL_RenderSetIntegerScale(sdlRenderer, SDL_TRUE);
 
     sdlTexture = SDL_CreateTexture(sdlRenderer,
                                    SDL_PIXELFORMAT_ABGR1555,
@@ -132,7 +171,7 @@ int main(int argc, char **argv)
     SDL_AudioSpec want;
 
     SDL_memset(&want, 0, sizeof(want)); /* or SDL_zero(want) */
-    want.freq = 42048;
+    want.freq = AUDIO_SAMPLE_RATE;
     want.format = AUDIO_F32;
     want.channels = 2;
     want.samples = 1024;
@@ -151,10 +190,6 @@ int main(int argc, char **argv)
     AgbMain();
 
     double accumulator = 0.0;
-
-    memset(&internalClock, 0, sizeof(internalClock));
-    internalClock.status = SIIRTCINFO_24HOUR;
-    UpdateInternalClock();
 
     bool isGameStepDrawn = false;
     while (isRunning)
@@ -177,7 +212,13 @@ int main(int argc, char **argv)
             {
                 //run game logic, draw frame and process DMAs and vblank
                 ENTER_VBLANK(); //you must be in VBlank before running a game tick
-                MainLoop();
+                if (!RunMainLoop())
+                {
+                    // Soft reset: drop the old sound, and start the next frame with MainLoop
+                    SDL_ClearQueuedAudio(1);
+                    accumulator -= fixedTimestep;
+                    continue;
+                }
                 if (!isGameStepDrawn)
                 {
                     VDraw(sdlTexture);
@@ -185,16 +226,11 @@ int main(int argc, char **argv)
                     isGameStepDrawn = true;
                 }
                 RunDMAsAndVBlank();
+                // The sound engine runs once a frame, like in the GBA's VBlank
+                // interrupt, so the music keeps time with the game
+                AudioUpdate();
 
                 accumulator -= fixedTimestep;
-            }
-
-            //samples per frame is 701, that gets multipled by two when being queued and then multipled by four because samples are float32 which are 4 bytes long hence the divide by 8
-            //this number is then checked against samples per frame multipled by three rounded down to 2000 to give it enough margin of error while not desyncing
-            //this is all done to sync audio to gameplay
-            if (SDL_GetQueuedAudioSize(1)/8 < 2000)
-            {
-                AudioUpdate();
             }
 
             if (videoScaleChanged)
@@ -292,9 +328,30 @@ static u64 HashBytes(u64 hash, const void *data, size_t size)
 void Platform_QueueAudio(float *audioBuffer, s32 samplesPerFrame)
 {
     if (sTestMode)
+    {
         sTestAudioHash = HashBytes(sTestAudioHash, audioBuffer, samplesPerFrame);
+        if (sTestAudio != NULL)
+            fwrite(audioBuffer, 1, samplesPerFrame, sTestAudio);
+    }
     else
+    {
+        // The game makes a frame of sound every frame, and the device plays it
+        // at the same rate, so the queue only needs fixing when the two come
+        // apart. After a stall it runs dry: start it again with a little silence
+        // in front, so the next frames don't run dry too. When the game gets
+        // ahead, like when it's sped up, drop what can't be played in time.
+        static const float sSilence[MIXED_AUDIO_BUFFER_SIZE * 2];
+        Uint32 queued = SDL_GetQueuedAudioSize(1);
+
+        if (queued > (Uint32)samplesPerFrame * 8)
+            return;
+        if (queued == 0)
+        {
+            for (int i = 0; i < 3; i++)
+                SDL_QueueAudio(1, sSilence, samplesPerFrame);
+        }
         SDL_QueueAudio(1, audioBuffer, samplesPerFrame);
+    }
 }
 
 
@@ -306,25 +363,8 @@ static void CloseSaveFile()
     }
 }
 
-// Key mappings
-#define KEY_A_BUTTON      SDLK_z
-#define KEY_B_BUTTON      SDLK_x
-#define KEY_START_BUTTON  SDLK_RETURN
-#define KEY_SELECT_BUTTON SDLK_BACKSLASH
-#define KEY_L_BUTTON      SDLK_a
-#define KEY_R_BUTTON      SDLK_s
-#define KEY_DPAD_UP       SDLK_UP
-#define KEY_DPAD_DOWN     SDLK_DOWN
-#define KEY_DPAD_LEFT     SDLK_LEFT
-#define KEY_DPAD_RIGHT    SDLK_RIGHT
-
-#define HANDLE_KEYUP(key) \
-case KEY_##key:  keys &= ~key; break;
-
-#define HANDLE_KEYDOWN(key) \
-case KEY_##key:  keys |= key; break;
-
-static u16 keys;
+// The GBA buttons in the headless test mode, from its input file
+static u16 sTestButtons;
 
 void ProcessEvents(void)
 {
@@ -337,47 +377,13 @@ void ProcessEvents(void)
         case SDL_QUIT:
             isRunning = false;
             break;
-        case SDL_KEYUP:
-            switch (event.key.keysym.sym)
-            {
-            HANDLE_KEYUP(A_BUTTON)
-            HANDLE_KEYUP(B_BUTTON)
-            HANDLE_KEYUP(START_BUTTON)
-            HANDLE_KEYUP(SELECT_BUTTON)
-            HANDLE_KEYUP(L_BUTTON)
-            HANDLE_KEYUP(R_BUTTON)
-            HANDLE_KEYUP(DPAD_UP)
-            HANDLE_KEYUP(DPAD_DOWN)
-            HANDLE_KEYUP(DPAD_LEFT)
-            HANDLE_KEYUP(DPAD_RIGHT)
-            case SDLK_SPACE:
-                if (speedUp)
-                {
-                    speedUp = false;
-                    timeScale = 1.0;
-                    //SDL_ClearQueuedAudio(1);
-                    //SDL_PauseAudio(0);
-                }
-                break;
-            }
-            break;
         case SDL_KEYDOWN:
             switch (event.key.keysym.sym)
             {
-            HANDLE_KEYDOWN(A_BUTTON)
-            HANDLE_KEYDOWN(B_BUTTON)
-            HANDLE_KEYDOWN(START_BUTTON)
-            HANDLE_KEYDOWN(SELECT_BUTTON)
-            HANDLE_KEYDOWN(L_BUTTON)
-            HANDLE_KEYDOWN(R_BUTTON)
-            HANDLE_KEYDOWN(DPAD_UP)
-            HANDLE_KEYDOWN(DPAD_DOWN)
-            HANDLE_KEYDOWN(DPAD_LEFT)
-            HANDLE_KEYDOWN(DPAD_RIGHT)
             case SDLK_r:
                 if (event.key.keysym.mod & (KMOD_LCTRL | KMOD_RCTRL))
                 {
-                    DoSoftReset();
+                    RequestSoftReset();
                 }
                 break;
             case SDLK_p:
@@ -386,18 +392,19 @@ void ProcessEvents(void)
                     paused = !paused;
                 }
                 break;
-            case SDLK_SPACE:
-                if (!speedUp)
-                {
-                    speedUp = true;
-                    timeScale = 5.0;
-                    //SDL_PauseAudio(1);
-                }
+            case SDLK_F11:
+                ToggleFullscreen();
                 break;
             }
             break;
+        case SDL_CONTROLLERDEVICEADDED:
+        case SDL_CONTROLLERDEVICEREMOVED:
+            Input_HandleEvent(&event);
+            break;
         case SDL_WINDOWEVENT:
-            if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+            // Keep the window a whole multiple of the GBA screen
+            if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED
+             && !(SDL_GetWindowFlags(sdlWindow) & SDL_WINDOW_FULLSCREEN))
             {
                 unsigned int w = event.window.data1;
                 unsigned int h = event.window.data2;
@@ -415,73 +422,24 @@ void ProcessEvents(void)
             break;
         }
     }
+
+    // Fast-forward while it's held
+    Input_GetButtons(&speedUp);
+    timeScale = speedUp ? 5.0 : 1.0;
 }
 
-#ifdef _WIN32
-#define STICK_THRESHOLD 0.5f
-u16 GetXInputKeys()
+static void ToggleFullscreen(void)
 {
-    XINPUT_STATE state;
-    ZeroMemory(&state, sizeof(XINPUT_STATE));
+    bool fullscreen = !(SDL_GetWindowFlags(sdlWindow) & SDL_WINDOW_FULLSCREEN);
 
-    DWORD dwResult = XInputGetState(0, &state);
-    u16 xinputKeys = 0;
-
-    if (dwResult == ERROR_SUCCESS)
-    {
-        /* A */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) >> 12;
-        /* B */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_X) >> 13;
-        /* Start */  xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_START) >> 1;
-        /* Select */ xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK) >> 3;
-        /* L */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) << 1;
-        /* R */      xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) >> 1;
-        /* Up */     xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP) << 6;
-        /* Down */   xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) << 6;
-        /* Left */   xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) << 3;
-        /* Right */  xinputKeys |= (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) << 1;
-
-
-        /* Control Stick */
-        float xAxis = (float)state.Gamepad.sThumbLX / (float)SHRT_MAX;
-        float yAxis = (float)state.Gamepad.sThumbLY / (float)SHRT_MAX;
-
-        if (xAxis < -STICK_THRESHOLD) xinputKeys |= DPAD_LEFT;
-        if (xAxis >  STICK_THRESHOLD) xinputKeys |= DPAD_RIGHT;
-        if (yAxis < -STICK_THRESHOLD) xinputKeys |= DPAD_DOWN;
-        if (yAxis >  STICK_THRESHOLD) xinputKeys |= DPAD_UP;
-
-
-        /* Speedup */
-        // Note: 'speedup' variable is only (un)set on keyboard input
-        double oldTimeScale = timeScale;
-        timeScale = (state.Gamepad.bRightTrigger > 0x80 || speedUp) ? 5.0 : 1.0;
-
-        if (oldTimeScale != timeScale)
-        {
-            if (timeScale > 1.0)
-            {
-                SDL_PauseAudio(1);
-            }
-            else
-            {
-                SDL_ClearQueuedAudio(1);
-                SDL_PauseAudio(0);
-            }
-        }
-    }
-
-    return xinputKeys;
+    SDL_SetWindowFullscreen(sdlWindow, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 }
-#endif // _WIN32
 
 u16 Platform_GetKeyInput(void)
 {
-#ifdef _WIN32
-    u16 gamepadKeys = GetXInputKeys();
-    return (gamepadKeys != 0) ? gamepadKeys : keys;
-#endif
-
-    return keys;
+    if (sTestMode)
+        return sTestButtons;
+    return Input_GetButtons(NULL);
 }
 
 void VDraw(SDL_Texture *texture)
@@ -497,6 +455,7 @@ void VDraw(SDL_Texture *texture)
 int DoMain(void *data)
 {
     AgbMain();
+    return 0;
 }
 
 void VBlankIntrWait(void)
@@ -526,6 +485,13 @@ void Platform_GetStatus(struct SiiRtcInfo *rtc)
 void Platform_SetStatus(struct SiiRtcInfo *rtc)
 {
     internalClock.status = rtc->status;
+}
+
+static void InitInternalClock(void)
+{
+    memset(&internalClock, 0, sizeof(internalClock));
+    internalClock.status = SIIRTCINFO_24HOUR;
+    UpdateInternalClock();
 }
 
 static void UpdateInternalClock(void)
@@ -603,13 +569,7 @@ void Platform_SetTime(struct SiiRtcInfo *rtc)
 
 void Platform_SetAlarm(u8 *alarmData)
 {
-    // TODO
-}
-
-void SoftReset(u32 resetFlags)
-{
-    puts("Soft Reset called. Exiting.");
-    exit(0);
+    // The game never sets an alarm
 }
 
 // All options take a value. Anything else is ignored, like before there were
@@ -632,10 +592,14 @@ static bool ParseArgs(int argc, char **argv)
         {
             sSavePath = value;
         }
+        else if (strcmp(arg, "--config") == 0)
+        {
+            sSettingsPath = value;
+        }
         else if (strcmp(arg, "--test-input") == 0)
         {
             sTestMode = true;
-            sTestInput = fopen(value, "r");
+            sTestInput = (strcmp(value, "-") == 0) ? stdin : fopen(value, "r");
             if (sTestInput == NULL)
             {
                 fprintf(stderr, "Could not open test input %s\n", value);
@@ -655,6 +619,25 @@ static bool ParseArgs(int argc, char **argv)
         {
             sTestShotDir = value;
         }
+        else if (strcmp(arg, "--test-state") == 0)
+        {
+            sTestState = (strcmp(value, "-") == 0) ? stdout : fopen(value, "w");
+            if (sTestState == NULL)
+            {
+                fprintf(stderr, "Could not open state output %s\n", value);
+                return false;
+            }
+        }
+        else if (strcmp(arg, "--test-audio") == 0)
+        {
+            sTestAudio = fopen(value, "wb");
+            if (sTestAudio == NULL)
+            {
+                fprintf(stderr, "Could not open audio output %s\n", value);
+                return false;
+            }
+            WriteWavHeader(sTestAudio, 0);
+        }
         else if (strcmp(arg, "--test-shot-every") == 0)
         {
             sTestShotEvery = strtoul(value, NULL, 10);
@@ -671,9 +654,38 @@ static bool ParseArgs(int argc, char **argv)
     return true;
 }
 
+// The save and the settings go in the user's data folder, unless there's a save
+// in the current directory, where earlier versions kept it
+static void FindDataFiles(void)
+{
+    static char savePath[1024], settingsPath[1024];
+    FILE *oldSave = fopen("pokeemerald.sav", "rb");
+
+    if (oldSave != NULL)
+        fclose(oldSave);
+    else
+        sDataDir = SDL_GetPrefPath("", "pokeemerald");
+    if (sDataDir == NULL)
+        sDataDir = SDL_strdup("");
+
+    if (sSavePath == NULL)
+    {
+        snprintf(savePath, sizeof(savePath), "%spokeemerald.sav", sDataDir);
+        sSavePath = savePath;
+    }
+    if (sSettingsPath == NULL)
+    {
+        snprintf(settingsPath, sizeof(settingsPath), "%spokeemerald.ini", sDataDir);
+        sSettingsPath = settingsPath;
+    }
+    printf("Save file: %s\nSettings: %s\n", sSavePath, sSettingsPath);
+}
+
 // Reads the keys to hold for the next frame from the test input. Each line is
 // "<frames> <buttons>", where buttons is "-" or names joined by '+', e.g.
-// "30 A+UP". Lines starting with '#' are ignored. Returns false at the end.
+// "30 A+UP". Besides the GBA buttons, names can be keys and controller inputs,
+// which go through the bindings in the settings, like "key:Z" or "pad:lefty-".
+// Lines starting with '#' are ignored. Returns false at the end.
 static bool ReadTestInput(u16 *outKeys)
 {
     static const struct { const char *name; u16 key; } sButtons[] = {
@@ -683,12 +695,20 @@ static bool ReadTestInput(u16 *outKeys)
     };
     static u32 sHoldFrames;
     static u16 sHoldKeys;
+    static bool sStateWritten;
     char line[256];
 
     while (sHoldFrames == 0)
     {
         char buttons[200];
 
+        // The state after the last line's frames, for a driver that decides
+        // what to press next from it (see test/headless/driver.py)
+        if (sTestState != NULL && !sStateWritten)
+        {
+            WriteTestState(sTestState, sTestFrame);
+            sStateWritten = true;
+        }
         if (fgets(line, sizeof(line), sTestInput) == NULL)
             return false;
         if (line[0] == '#' || sscanf(line, "%u %199s", &sHoldFrames, buttons) != 2)
@@ -697,12 +717,14 @@ static bool ReadTestInput(u16 *outKeys)
             continue;
         }
 
+        sStateWritten = false;
         sHoldKeys = 0;
+        Input_ReleaseTestInputs();
         for (char *name = strtok(buttons, "+"); name != NULL; name = strtok(NULL, "+"))
         {
             size_t i;
 
-            if (strcmp(name, "-") == 0)
+            if (strcmp(name, "-") == 0 || Input_PressTestInput(name))
                 continue;
             for (i = 0; i < ARRAY_COUNT(sButtons); i++)
             {
@@ -718,8 +740,26 @@ static bool ReadTestInput(u16 *outKeys)
     }
 
     sHoldFrames--;
-    *outKeys = sHoldKeys;
+    *outKeys = sHoldKeys | Input_GetTestButtons();
     return true;
+}
+
+// A WAV file header for the test mode's audio: 32-bit float stereo, with
+// dataSize bytes of samples after it
+static void WriteWavHeader(FILE *file, u32 dataSize)
+{
+    u8 header[44];
+    u32 fields[] = {36 + dataSize, 16, 3 | (2 << 16), AUDIO_SAMPLE_RATE, AUDIO_SAMPLE_RATE * 8, 8 | (32 << 16), dataSize};
+
+    memcpy(header, "RIFF", 4);
+    memcpy(header + 8, "WAVEfmt ", 8);
+    memcpy(header + 36, "data", 4);
+    // Little-endian, like every platform the port runs on
+    memcpy(header + 4, &fields[0], 4);
+    memcpy(header + 16, &fields[1], 16);
+    memcpy(header + 32, &fields[5], 4);
+    memcpy(header + 40, &fields[6], 4);
+    fwrite(header, 1, sizeof(header), file);
 }
 
 static void WriteTestScreenshot(const uint16_t *image)
@@ -757,24 +797,25 @@ static int RunTestMode(void)
 {
     static uint16_t image[DISPLAY_WIDTH * DISPLAY_HEIGHT];
 
-    cgb_audio_init(42048);
+    cgb_audio_init(AUDIO_SAMPLE_RATE);
     AgbMain();
 
-    memset(&internalClock, 0, sizeof(internalClock));
-    internalClock.status = SIIRTCINFO_24HOUR;
-    UpdateInternalClock();
-
-    for (sTestFrame = 0; ReadTestInput(&keys); sTestFrame++)
+    for (sTestFrame = 0; ReadTestInput(&sTestButtons); sTestFrame++)
     {
+        bool ranFrame;
+
         ENTER_VBLANK();
-        MainLoop();
+        ranFrame = RunMainLoop();
         memset(image, 0, sizeof(image));
         DrawFrame(image);
         REG_VCOUNT = 161;
-        RunDMAsAndVBlank();
-
         sTestAudioHash = 0xCBF29CE484222325ull;
-        AudioUpdate();
+        // After a soft reset, the next frame starts with MainLoop, like at startup
+        if (ranFrame)
+        {
+            RunDMAsAndVBlank();
+            AudioUpdate();
+        }
 
         if (sTestHashes != NULL)
             fprintf(sTestHashes, "%u %016llx %016llx\n", sTestFrame,
@@ -788,6 +829,14 @@ static int RunTestMode(void)
         WriteTestScreenshot(image);
     if (sTestHashes != NULL)
         fclose(sTestHashes);
+    if (sTestAudio != NULL)
+    {
+        long size = ftell(sTestAudio);
+
+        fseek(sTestAudio, 0, SEEK_SET);
+        WriteWavHeader(sTestAudio, size - 44);
+        fclose(sTestAudio);
+    }
     fclose(sTestInput);
     CloseSaveFile();
     return 0;

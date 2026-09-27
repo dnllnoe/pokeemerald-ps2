@@ -61,7 +61,7 @@ const IntrFunc gIntrTableTemplate[] =
 static u16 sUnusedVar; // Never read
 
 #ifdef PORTABLE
-u8 gHeap[HEAP_SIZE];
+ALIGNED(8) u8 gHeap[HEAP_SIZE];
 #endif
 u16 gKeyRepeatStartDelay;
 bool8 gLinkTransferringData;
@@ -98,8 +98,11 @@ void MainLoop()
      && JOY_HELD_RAW(A_BUTTON)
      && JOY_HELD_RAW(B_START_SELECT) == B_START_SELECT)
     {
+#ifndef PORTABLE
+        // The wireless adapter isn't set up on PC (see InitRFU in AgbMain)
         rfu_REQ_stopMode();
         rfu_waitREQComplete();
+#endif
         DoSoftReset();
     }
 

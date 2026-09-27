@@ -8922,7 +8922,7 @@ static void ApplyLevitateMovement(u8 taskId)
 
 static void DestroyLevitateMovementTask(u8 taskId)
 {
-    struct ObjectEvent *objectEvent;
+    struct ObjectEvent UNUSED *objectEvent;
     struct Task *task = &gTasks[taskId];
 
     objectEvent = (struct ObjectEvent*)task->ptr.genericPtr[0];

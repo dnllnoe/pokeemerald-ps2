@@ -9,7 +9,7 @@
  *   // cmd->x is gBattleAnimArgs[0] and cmd->y is gBattleAnimArgs[1]
  * } */
 #if MODERN
-#define CMD_ARGS(...) struct { s16 __VA_ARGS__; } *cmd = (void *)gBattleAnimArgs
+#define CMD_ARGS(...) struct { s16 __VA_ARGS__; } *cmd UNUSED = (void *)gBattleAnimArgs
 #else
 #define CMD_ARGS(...) struct CMD_ARGS { s16 __VA_ARGS__; }
 #define cmd ((struct CMD_ARGS *)gBattleAnimArgs)

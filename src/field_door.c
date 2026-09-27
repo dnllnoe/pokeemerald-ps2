@@ -309,7 +309,12 @@ static void BuildDoorTiles(u16 *tiles, u16 tileNum, const u8 *paletteNums)
     // The remaining layers are left as tile 0 (with the same palette)
     for (; i < 8; i++)
     {
+#ifdef UBFIX
+        // For the bottom metatile, these would be read from past the end of paletteNums
+        tile = tiles[i - 4] & 0xF000;
+#else
         tile = *(paletteNums++) << 12;
+#endif
         tiles[i] = tile;
     }
 }

@@ -227,7 +227,7 @@ static EWRAM_DATA u16 *sSlot1TilemapBuffer = 0; // for switching party slots
 static EWRAM_DATA u16 *sSlot2TilemapBuffer = 0; //
 EWRAM_DATA u8 gSelectedOrderFromParty[MAX_FRONTIER_PARTY_SIZE] = {0};
 static EWRAM_DATA u16 sPartyMenuItemId = 0;
-static EWRAM_DATA u16 sUnused = 0;
+static EWRAM_DATA u16 UNUSED sUnused = 0;
 EWRAM_DATA u8 gBattlePartyCurrentOrder[PARTY_SIZE / 2] = {0}; // bits 0-3 are the current pos of Slot 1, 4-7 are Slot 2, and so on
 
 // IWRAM common
@@ -3094,7 +3094,7 @@ static void CursorCb_Give(u8 taskId)
 
 static void CB2_SelectBagItemToGive(void)
 {
-    if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE == FALSE)
+    if ((CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE) == FALSE)
         GoToBagMenu(ITEMMENULOCATION_PARTY, POCKETS_COUNT, CB2_GiveHoldItem);
     else
         GoToBattlePyramidBagMenu(PYRAMIDBAG_LOC_PARTY, CB2_GiveHoldItem);
@@ -4277,7 +4277,7 @@ void CB2_ShowPartyMenuForItemUse(void)
 
 static void CB2_ReturnToBagMenu(void)
 {
-    if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE == FALSE)
+    if ((CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE) == FALSE)
         GoToBagMenu(ITEMMENULOCATION_LAST, POCKETS_COUNT, NULL);
     else
         GoToBattlePyramidBagMenu(PYRAMIDBAG_LOC_PREV, gPyramidBagMenuState.exitCallback);

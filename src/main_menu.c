@@ -2108,8 +2108,16 @@ static void NewGameBirchSpeech_SetDefaultPlayerName(u8 nameId)
         name = sMalePresetNames[nameId];
     else
         name = sFemalePresetNames[nameId];
+#ifdef UBFIX
+    // Most of the preset names are shorter than PLAYER_NAME_LENGTH, so stop at their end
+    for (i = 0; i < PLAYER_NAME_LENGTH && name[i] != EOS; i++)
+        gSaveBlock2Ptr->playerName[i] = name[i];
+    for (; i < PLAYER_NAME_LENGTH; i++)
+        gSaveBlock2Ptr->playerName[i] = EOS;
+#else
     for (i = 0; i < PLAYER_NAME_LENGTH; i++)
         gSaveBlock2Ptr->playerName[i] = name[i];
+#endif
     gSaveBlock2Ptr->playerName[PLAYER_NAME_LENGTH] = EOS;
 }
 
@@ -2250,6 +2258,11 @@ static void NewGameBirchSpeech_WaitForThisIsPokemonText(struct TextPrinterTempla
 {
     // Wait for Birch's "This is a Pokémon" text to reach the pause
     // Then start the PokéBall release (if it hasn't been started already)
+#ifdef UBFIX
+    // After the first character, currentChar - 2 is before the start of the text
+    if (printer->currentChar < gStringVar4 + 2)
+        return;
+#endif
     if (*(printer->currentChar - 2) == EXT_CTRL_CODE_PAUSE && !sStartedPokeBallTask)
     {
         sStartedPokeBallTask = TRUE;

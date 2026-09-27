@@ -1494,7 +1494,7 @@ static void ItemStorage_HandleRemoveItem(u8 taskId)
 
 static void ItemStorage_HandleErrorMessageInput(u8 taskId)
 {
-    s16 *data = gTasks[taskId].data;
+    s16 UNUSED *data = gTasks[taskId].data;
     if (JOY_NEW(A_BUTTON | B_BUTTON))
     {
         ItemStorage_PrintMessage(ItemStorage_GetMessage(gSaveBlock1Ptr->pcItems[gPlayerPCItemPageInfo.itemsAbove + gPlayerPCItemPageInfo.cursorPos].itemId));
