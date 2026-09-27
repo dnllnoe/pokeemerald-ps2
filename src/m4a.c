@@ -1859,7 +1859,7 @@ bool32 IsPokemonCryPlaying(struct MusicPlayerInfo *mplayInfo)
 {
     struct MusicPlayerTrack *track = mplayInfo->tracks;
 
-#if defined PORTABLE && !defined SOUND_DISABLED
+#ifdef PORTABLE
     if (!mplayInfo->hasBeenRanOnce)
         return TRUE;
 #endif

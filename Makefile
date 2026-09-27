@@ -7,9 +7,7 @@ MODERN      ?= 0
 KEEP_TEMPS  ?= 0
 PORTABLE    ?= 0
 IS64BIT     ?= 1
-TARGET_PLATFORM ?= PLATFORM_SDL2
 TARGET_OS       ?= NONE
-TILE_RENDERER   ?= RENDERER_EASY_DRAW
 
 # `File name`.gba ('_modern' will be appended to the modern builds)
 FILE_NAME := pokeemerald
@@ -174,35 +172,23 @@ ifeq ($(PORTABLE),1)
 
   #Windows only
   ifeq ($(TARGET_OS),WINDOWS)
-    ifneq ($(NO_STD_LIB),1)
-      PLATFORM_LFLAGS += -lmingw32
-    endif
+    PLATFORM_LFLAGS += -lmingw32
   endif
 
-  ifeq ($(TARGET_PLATFORM), PLATFORM_SDL2)
-    ifeq ($(TARGET_OS),MACOS)
-      # From Homebrew. SDL2main isn't needed on macOS.
-      SDL_PREFIX := $(shell sdl2-config --prefix)
-      ifeq ($(SDL_PREFIX),)
-        $(error SDL2 isn't installed: brew install sdl2)
-      endif
-      PLATFORM_INCLUDES += -I$(SDL_PREFIX)/include
-      PLATFORM_LFLAGS += -L$(SDL_PREFIX)/lib -lSDL2 -lm
-    else
-      PLATFORM_LFLAGS += -lSDL2main -lSDL2 -lm
+  # SDL2
+  ifeq ($(TARGET_OS),MACOS)
+    # From Homebrew. SDL2main isn't needed on macOS.
+    SDL_PREFIX := $(shell sdl2-config --prefix)
+    ifeq ($(SDL_PREFIX),)
+      $(error SDL2 isn't installed: brew install sdl2)
     endif
-    ifeq ($(IS64BIT),0)
-      PLATFORM_INCLUDES += -DSDL_DISABLE_IMMINTRIN_H -DSDL_DISABLE_MMINTRIN_H -DSDL_DISABLE_XMMINTRIN_H -DSDL_DISABLE_EMMINTRIN_H -DSDL_DISABLE_PMMINTRIN_H
-    endif
+    PLATFORM_INCLUDES += -I$(SDL_PREFIX)/include
+    PLATFORM_LFLAGS += -L$(SDL_PREFIX)/lib -lSDL2 -lm
+  else
+    PLATFORM_LFLAGS += -lSDL2main -lSDL2 -lm
   endif
-
-  ifeq ($(TARGET_PLATFORM), PLATFORM_WIN32)
-    ifeq ($(NO_STD_LIB),1)
-      PLATFORM_LFLAGS += -Wl,-e__main -nostdlib
-      CPPFLAGS += -D NO_STD_LIB_ENABLED
-    endif
-    PLATFORM_LFLAGS += -lkernel32 -luser32 -lgdi32
-    PLATFORM_INCLUDES += -D SOUND_DISABLED
+  ifeq ($(IS64BIT),0)
+    PLATFORM_INCLUDES += -DSDL_DISABLE_IMMINTRIN_H -DSDL_DISABLE_MMINTRIN_H -DSDL_DISABLE_XMMINTRIN_H -DSDL_DISABLE_EMMINTRIN_H -DSDL_DISABLE_PMMINTRIN_H
   endif
 else
   ASM_PSEUDO_OP_CONV := cat
@@ -294,7 +280,7 @@ ifeq ($(MODERN),0)
   LIBPATH := -L ../../tools/agbcc/lib
   LIB := $(LIBPATH) -lgcc -lc -L../../libagbsyscall -lagbsyscall
 else ifeq ($(PORTABLE),1)
-  CPPFLAGS += -std=gnu99 -D NONMATCHING -D PORTABLE -D $(TARGET_PLATFORM) -D $(TILE_RENDERER) -D UBFIX $(CPPFLAGS64) $(PLATFORM_INCLUDES)
+  CPPFLAGS += -std=gnu99 -D NONMATCHING -D PORTABLE -D UBFIX $(CPPFLAGS64) $(PLATFORM_INCLUDES)
   ifneq ($(SDL_DIR),)
     CPPFLAGS += -I$(SDL_DIR)/include
   endif
