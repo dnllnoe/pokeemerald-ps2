@@ -35,7 +35,7 @@ build with debug info (`make linux CFLAGS=-g`).
 
 `compare.py BASELINE CANDIDATE` runs the same scenarios with two builds and reports the
 first frame whose video or audio differs. Use it to confirm that a change doesn't alter
-the game, e.g. by comparing a build of your branch against one of `pc_port`.
+the game, e.g. by comparing a build of your branch against one of `vanilla`.
 
 `savecheck.py SAVE` checks a save file against the GBA format, independently of the
 game code, and prints what's in it.
