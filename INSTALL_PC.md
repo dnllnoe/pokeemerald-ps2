@@ -2,8 +2,6 @@
 
 These instructions explain how to set up the tools required to build **pokeemerald**, which assembles the source files into a binary.
 
-If you run into trouble, ask for help on Discord (see [README.md](README.md)).
-
 ## Windows 10/11 (WSL1)
 Follow pret instructions on how to install WSL1 [here](INSTALL.md)
 
