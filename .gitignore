@@ -53,3 +53,14 @@ prefabs.json
 /pokeemerald.ini
 /gamecontrollerdb.txt
 __pycache__/
+
+# Claude Code: .claude/ is ignored except the checked-in review agents, the
+# code-audit skill and the shared settings (the audit loop's Stop hook)
+.claude/*
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/review/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/code-audit/
+!.claude/settings.json
