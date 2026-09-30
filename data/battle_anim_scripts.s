@@ -12,7 +12,7 @@
 
 	ptr_align
 gMovesWithQuietBGM::
-	.short MOVE_SING, MOVE_PERISH_SONG, MOVE_GRASS_WHISTLE, 0xFFFF
+	.2byte MOVE_SING, MOVE_PERISH_SONG, MOVE_GRASS_WHISTLE, 0xFFFF
 
 	ptr_align
 gBattleAnims_Moves::

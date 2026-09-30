@@ -14,10 +14,10 @@ OldaleTown_Mart_EventScript_Clerk::
 
 	.align 2
 OldaleTown_Mart_Pokemart_Basic:
-	.short ITEM_POTION
-	.short ITEM_ANTIDOTE
-	.short ITEM_PARALYZE_HEAL
-	.short ITEM_AWAKENING
+	.2byte ITEM_POTION
+	.2byte ITEM_ANTIDOTE
+	.2byte ITEM_PARALYZE_HEAL
+	.2byte ITEM_AWAKENING
 	pokemartlistend
 
 OldaleTown_Mart_ExpandedItems::
@@ -28,11 +28,11 @@ OldaleTown_Mart_ExpandedItems::
 
 	.align 2
 OldaleTown_Mart_Pokemart_Expanded:
-	.short ITEM_POKE_BALL
-	.short ITEM_POTION
-	.short ITEM_ANTIDOTE
-	.short ITEM_PARALYZE_HEAL
-	.short ITEM_AWAKENING
+	.2byte ITEM_POKE_BALL
+	.2byte ITEM_POTION
+	.2byte ITEM_ANTIDOTE
+	.2byte ITEM_PARALYZE_HEAL
+	.2byte ITEM_AWAKENING
 	pokemartlistend
 
 OldaleTown_Mart_EventScript_Woman::

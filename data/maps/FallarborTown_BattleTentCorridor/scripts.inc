@@ -4,7 +4,7 @@ FallarborTown_BattleTentCorridor_MapScripts::
 
 FallarborTown_BattleTentCorridor_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, FallarborTown_BattleTentCorridor_EventScript_EnterCorridor
-	.short 0
+	.2byte 0
 
 FallarborTown_BattleTentCorridor_EventScript_EnterCorridor::
 	lockall

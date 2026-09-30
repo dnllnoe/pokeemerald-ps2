@@ -25,7 +25,7 @@ EverGrandeCity_SidneysRoom_EventScript_CloseDoor::
 
 EverGrandeCity_SidneysRoom_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, EverGrandeCity_SidneysRoom_EventScript_PlayerTurnNorth
-	.short 0
+	.2byte 0
 
 EverGrandeCity_SidneysRoom_EventScript_PlayerTurnNorth::
 	turnobject LOCALID_PLAYER, DIR_NORTH
@@ -33,7 +33,7 @@ EverGrandeCity_SidneysRoom_EventScript_PlayerTurnNorth::
 
 EverGrandeCity_SidneysRoom_OnFrame:
 	map_script_2 VAR_ELITE_4_STATE, 0, EverGrandeCity_SidneysRoom_EventScript_WalkInCloseDoor
-	.short 0
+	.2byte 0
 
 EverGrandeCity_SidneysRoom_EventScript_WalkInCloseDoor::
 	lockall

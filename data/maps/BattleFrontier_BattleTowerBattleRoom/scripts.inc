@@ -5,7 +5,7 @@ BattleFrontier_BattleTowerBattleRoom_MapScripts::
 
 BattleFrontier_BattleTowerBattleRoom_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattleTowerBattleRoom_EventScript_SetUpObjects
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleTowerBattleRoom_EventScript_SetUpObjects::
 	setvar VAR_TEMP_1, 1
@@ -14,7 +14,7 @@ BattleFrontier_BattleTowerBattleRoom_EventScript_SetUpObjects::
 
 BattleFrontier_BattleTowerBattleRoom_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, BattleFrontier_BattleTowerBattleRoom_EventScript_EnterRoom
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleTowerBattleRoom_EventScript_EnterRoom::
 	setvar VAR_TEMP_0, 1

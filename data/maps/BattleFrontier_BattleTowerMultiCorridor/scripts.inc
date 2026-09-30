@@ -31,7 +31,7 @@ BattleFrontier_BattleTowerMultiCorridor_EventScript_SetLinkPlayerGfx::
 
 BattleFrontier_BattleTowerMultiCorridor_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattleTowerMultiCorridor_EventScript_SetUpObjects
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleTowerMultiCorridor_EventScript_SetUpObjects::
 	hideobjectat LOCALID_PLAYER, MAP_BATTLE_FRONTIER_BATTLE_TOWER_MULTI_CORRIDOR
@@ -42,7 +42,7 @@ BattleFrontier_BattleTowerMultiCorridor_EventScript_SetUpObjects::
 
 BattleFrontier_BattleTowerMultiCorridor_OnFrame:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattleTowerMultiCorridor_EventScript_EnterCorridor
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleTowerMultiCorridor_EventScript_EnterCorridor::
 	lockall

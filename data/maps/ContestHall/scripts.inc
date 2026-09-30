@@ -56,11 +56,11 @@ ContestHall_EventScript_ReShowAudience::
 
 ContestHall_OnFrame:
 	map_script_2 VAR_CONTEST_HALL_STATE, 1, ContestHall_EventScript_Contest
-	.short 0
+	.2byte 0
 
 ContestHall_OnWarp:
 	map_script_2 VAR_CONTEST_HALL_STATE, 1, ContestHall_EventScript_SetContestObjects
-	.short 0
+	.2byte 0
 
 ContestHall_EventScript_Contest::
 	call ContestHall_EventScript_DoContest

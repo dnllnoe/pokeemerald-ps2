@@ -71,6 +71,65 @@ static void RenderBGScanline(int bgNum, uint16_t control, uint16_t hoffs, uint16
     hoffs &= 0x1FF;
     voffs &= 0x1FF;
 
+    // Without mosaic, whole runs of pixels come from the same map entry, so it
+    // only needs looking up once per tile instead of for every pixel
+    if (!(control & BGCNT_MOSAIC))
+    {
+        unsigned int yy = (lineNum + voffs) & 0x1FF;
+        uint16_t *bgmapRow = (uint16_t *)BG_SCREEN_ADDR(screenBaseBlock);
+
+        if (yy > 255 && mapHeightInPixels > 256)
+            bgmapRow += (mapWidthInPixels > 256) ? 0x800 : 0x400;
+        yy &= 0xFF;
+        bgmapRow += (yy / 8) * 32;
+
+        for (unsigned int x = 0; x < DISPLAY_WIDTH;)
+        {
+            unsigned int xx = (x + hoffs) & 0x1FF;
+            uint16_t *bgmap = bgmapRow;
+
+            if (xx > 255 && mapWidthInPixels > 256)
+                bgmap += 0x400;
+            xx &= 0xFF;
+
+            uint16_t entry = bgmap[xx / 8];
+            unsigned int tileY = (entry & (1 << 11)) ? 7 - (yy % 8) : yy % 8;
+            uint8_t *row = bgtiles + (uint16_t)((entry & 0x3FF) * (bitsPerPixel * 8)) + tileY * bitsPerPixel;
+            bool flipX = entry & (1 << 10);
+            unsigned int run = 8 - (xx % 8);
+
+            if (run > DISPLAY_WIDTH - x)
+                run = DISPLAY_WIDTH - x;
+            if (bitsPerPixel == 4)
+            {
+                uint16_t *subPal = pal + 16 * ((entry >> 12) & 0xF);
+                // The row's 8 pixels, the first in the lowest bits. Rows are
+                // 4 bytes and so aligned, and a clear row draws nothing.
+                uint32_t pixels = *(uint32_t *)row;
+
+                if (pixels == 0)
+                {
+                    x += run;
+                    continue;
+                }
+                for (unsigned int tileX = xx % 8, end = tileX + run; tileX < end; tileX++, x++)
+                {
+                    unsigned int px = flipX ? 7 - tileX : tileX;
+                    uint8_t pixel = (pixels >> (px * 4)) & 0xF;
+
+                    if (pixel != 0)
+                        line[x] = subPal[pixel] | 0x8000;
+                }
+            }
+            else
+            {
+                for (unsigned int tileX = xx % 8, end = tileX + run; tileX < end; tileX++, x++)
+                    line[x] = pal[row[flipX ? 7 - tileX : tileX]] | 0x8000;
+            }
+        }
+        return;
+    }
+
     for (unsigned int x = 0; x < DISPLAY_WIDTH; x++)
     {
         uint16_t *bgmap = (uint16_t *)BG_SCREEN_ADDR(screenBaseBlock);
@@ -789,6 +848,29 @@ static void DrawScanline(uint16_t *pixels, uint16_t vcount)
             if (isbgEnabled(bgnum))
             {
                 uint16_t *src = scanline.layers[bgnum];
+
+                // Without a blend on this layer, every opaque pixel is copied
+                // as it is, where the windows let the layer show
+                if (blendMode == 0 || !(REG_BLDCNT & (1 << bgnum)))
+                {
+                    if (!windowsEnabled)
+                    {
+                        for (xpos = 0; xpos < DISPLAY_WIDTH; xpos++)
+                        {
+                            if (getAlphaBit(src[xpos]))
+                                pixels[xpos] = src[xpos];
+                        }
+                    }
+                    else
+                    {
+                        for (xpos = 0; xpos < DISPLAY_WIDTH; xpos++)
+                        {
+                            if (getAlphaBit(src[xpos]) && (scanline.winMask[xpos] & (1 << bgnum)))
+                                pixels[xpos] = src[xpos];
+                        }
+                    }
+                    continue;
+                }
                 //copy all pixels to framebuffer 
                 for (xpos = 0; xpos < DISPLAY_WIDTH; xpos++)
                 {
@@ -861,49 +943,140 @@ uint16_t *memsetu16(uint16_t *dst, uint16_t fill, size_t count)
     return dst;
 }
 
+// What a line does before it's drawn: the VCOUNT interrupt
+static void BeginLine(int i)
+{
+    REG_VCOUNT = i;
+    if(((REG_DISPSTAT >> 8) & 0xFF) == REG_VCOUNT)
+    {
+        REG_DISPSTAT |= INTR_FLAG_VCOUNT;
+        if(REG_DISPSTAT & DISPSTAT_VCOUNT_INTR)
+                gIntrTable[0]();
+    }
+}
+
+static void DrawLine(uint16_t *line, int i)
+{
+    // Render the backdrop color before the each individual scanline.
+    // backdrop color brightness effects
+    unsigned int blendMode = (REG_BLDCNT >> 6) & 3;
+    uint16_t backdropColor = *(uint16_t *)PLTT;
+    if (REG_BLDCNT & BLDCNT_TGT1_BD)
+    {
+        switch (blendMode)
+        {
+        case 2:
+            backdropColor = alphaBrightnessIncrease(backdropColor);
+            break;
+        case 3:
+            backdropColor = alphaBrightnessDecrease(backdropColor);
+            break;
+        }
+    }
+
+    memsetu16(line, backdropColor, DISPLAY_WIDTH);
+    DrawScanline(line, i);
+}
+
+// What a line does after it's drawn: HBlank DMAs and interrupt
+static void EndLine(void)
+{
+    REG_DISPSTAT |= INTR_FLAG_HBLANK;
+
+    RunDMAs(DMA_HBLANK);
+    
+    if (REG_DISPSTAT & DISPSTAT_HBLANK_INTR)
+        gIntrTable[3]();
+
+    REG_DISPSTAT &= ~INTR_FLAG_HBLANK;
+    REG_DISPSTAT &= ~INTR_FLAG_VCOUNT;
+}
+
 void DrawFrame(uint16_t *pixels)
 {
     int i;
 
     for (i = 0; i < DISPLAY_HEIGHT; i++)
     {
-        REG_VCOUNT = i;
-        if(((REG_DISPSTAT >> 8) & 0xFF) == REG_VCOUNT)
-        {
-            REG_DISPSTAT |= INTR_FLAG_VCOUNT;
-            if(REG_DISPSTAT & DISPSTAT_VCOUNT_INTR)
-                    gIntrTable[0]();
-        }
-
-        // Render the backdrop color before the each individual scanline.
-        // backdrop color brightness effects
-        unsigned int blendMode = (REG_BLDCNT >> 6) & 3;
-        uint16_t backdropColor = *(uint16_t *)PLTT;
-        if (REG_BLDCNT & BLDCNT_TGT1_BD)
-        {
-            switch (blendMode)
-            {
-            case 2:
-                backdropColor = alphaBrightnessIncrease(backdropColor);
-                break;
-            case 3:
-                backdropColor = alphaBrightnessDecrease(backdropColor);
-                break;
-            }
-        }
-
-        memsetu16(&pixels[i * DISPLAY_WIDTH], backdropColor, DISPLAY_WIDTH);
-        DrawScanline(&pixels[i * DISPLAY_WIDTH], i);
-        
-        REG_DISPSTAT |= INTR_FLAG_HBLANK;
-
-        RunDMAs(DMA_HBLANK);
-        
-        if (REG_DISPSTAT & DISPSTAT_HBLANK_INTR)
-            gIntrTable[3]();
-
-        REG_DISPSTAT &= ~INTR_FLAG_HBLANK;
-        REG_DISPSTAT &= ~INTR_FLAG_VCOUNT;
+        BeginLine(i);
+        DrawLine(&pixels[i * DISPLAY_WIDTH], i);
+        EndLine();
     }
 }
+
+#ifdef __PS2__
+#include "platform/ps2_gs.h"
+
+static void SaveLineRegs(struct GsLineState *s)
+{
+    s->dispcnt = REG_DISPCNT;
+    for (int bg = 0; bg < 4; bg++)
+    {
+        s->bgcnt[bg] = *(uint16_t *)(REG_ADDR_BG0CNT + bg * 2);
+        s->hofs[bg] = *(uint16_t *)(REG_ADDR_BG0HOFS + bg * 4);
+        s->vofs[bg] = *(uint16_t *)(REG_ADDR_BG0VOFS + bg * 4);
+    }
+    s->bldcnt = REG_BLDCNT;
+    s->bldalpha = REG_BLDALPHA;
+    s->bldy = REG_BLDY;
+    s->winin = REG_WININ;
+    s->winout = REG_WINOUT;
+    s->win0h = REG_WIN0H;
+    s->win0v = REG_WIN0V;
+    s->win1h = REG_WIN1H;
+    s->win1v = REG_WIN1V;
+    s->mosaic = REG_MOSAIC;
+}
+
+static void LoadLineRegs(const struct GsLineState *s)
+{
+    REG_DISPCNT = s->dispcnt;
+    for (int bg = 0; bg < 4; bg++)
+    {
+        *(uint16_t *)(REG_ADDR_BG0CNT + bg * 2) = s->bgcnt[bg];
+        *(uint16_t *)(REG_ADDR_BG0HOFS + bg * 4) = s->hofs[bg];
+        *(uint16_t *)(REG_ADDR_BG0VOFS + bg * 4) = s->vofs[bg];
+    }
+    REG_BLDCNT = s->bldcnt;
+    REG_BLDALPHA = s->bldalpha;
+    REG_BLDY = s->bldy;
+    REG_WININ = s->winin;
+    REG_WINOUT = s->winout;
+    REG_WIN0H = s->win0h;
+    REG_WIN0V = s->win0v;
+    REG_WIN1H = s->win1h;
+    REG_WIN1V = s->win1v;
+    REG_MOSAIC = s->mosaic;
+}
+
+// Runs the lines like DrawFrame, keeping each one's video registers, and then
+// has the GS draw them. What the GS can't draw like the GBA is drawn in
+// software, from the registers kept.
+void DrawFramePS2(void)
+{
+    static struct GsLineState lines[DISPLAY_HEIGHT];
+    static uint16_t image[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+    struct GsLineState after;
+
+    for (int i = 0; i < DISPLAY_HEIGHT; i++)
+    {
+        BeginLine(i);
+        SaveLineRegs(&lines[i]);
+        EndLine();
+    }
+    if (PS2GS_CanDraw(lines, (const uint16_t *)OAM))
+    {
+        PS2GS_DrawLines(lines, (const uint8_t *)VRAM_, (const uint16_t *)PLTT, (const uint16_t *)OAM);
+        return;
+    }
+    SaveLineRegs(&after);
+    for (int i = 0; i < DISPLAY_HEIGHT; i++)
+    {
+        LoadLineRegs(&lines[i]);
+        DrawLine(&image[i * DISPLAY_WIDTH], i);
+    }
+    LoadLineRegs(&after);
+    PS2GS_DrawImage(image);
+}
+#endif // __PS2__
 #endif // PORTABLE

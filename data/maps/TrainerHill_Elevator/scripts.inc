@@ -4,7 +4,7 @@ TrainerHill_Elevator_MapScripts::
 
 TrainerHill_Elevator_OnFrame:
 	map_script_2 VAR_TEMP_4, 0, TrainerHill_Elevator_EventScript_EnterElevator
-	.short 0
+	.2byte 0
 
 TrainerHill_Elevator_EventScript_Attendant::
 	end

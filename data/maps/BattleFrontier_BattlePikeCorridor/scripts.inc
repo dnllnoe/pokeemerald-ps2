@@ -5,7 +5,7 @@ BattleFrontier_BattlePikeCorridor_MapScripts::
 
 BattleFrontier_BattlePikeCorridor_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, BattleFrontier_BattlePikeCorridor_EventScript_EnterCorridor
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattlePikeCorridor_EventScript_EnterCorridor::
 	delay 16
@@ -29,7 +29,7 @@ BattleFrontier_BattlePikeCorridor_EventScript_EnterCorridor::
 
 BattleFrontier_BattlePikeCorridor_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattlePikeCorridor_EventScript_TurnPlayerNorth
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattlePikeCorridor_EventScript_TurnPlayerNorth::
 	setvar VAR_TEMP_1, 1

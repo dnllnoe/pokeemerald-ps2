@@ -15,7 +15,7 @@ Route112_CableCarStation_EventScript_MoveAttendantAside::
 
 Route112_CableCarStation_OnFrame:
 	map_script_2 VAR_CABLE_CAR_STATION_STATE, 2, Route112_CableCarStation_EventScript_ExitCableCar
-	.short 0
+	.2byte 0
 
 Route112_CableCarStation_EventScript_ExitCableCar::
 	lockall

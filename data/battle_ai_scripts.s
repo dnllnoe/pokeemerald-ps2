@@ -852,46 +852,46 @@ AI_CV_MirrorMove_End:
 	end
 
 AI_CV_MirrorMove_EncouragedMovesToMirror:
-	.short MOVE_SLEEP_POWDER
-	.short MOVE_LOVELY_KISS
-	.short MOVE_SPORE
-	.short MOVE_HYPNOSIS
-	.short MOVE_SING
-	.short MOVE_GRASS_WHISTLE
-	.short MOVE_SHADOW_PUNCH
-	.short MOVE_SAND_ATTACK
-	.short MOVE_SMOKESCREEN
-	.short MOVE_TOXIC
-	.short MOVE_GUILLOTINE
-	.short MOVE_HORN_DRILL
-	.short MOVE_FISSURE
-	.short MOVE_SHEER_COLD
-	.short MOVE_CROSS_CHOP
-	.short MOVE_AEROBLAST
-	.short MOVE_CONFUSE_RAY
-	.short MOVE_SWEET_KISS
-	.short MOVE_SCREECH
-	.short MOVE_COTTON_SPORE
-	.short MOVE_SCARY_FACE
-	.short MOVE_FAKE_TEARS
-	.short MOVE_METAL_SOUND
-	.short MOVE_THUNDER_WAVE
-	.short MOVE_GLARE
-	.short MOVE_POISON_POWDER
-	.short MOVE_SHADOW_BALL
-	.short MOVE_DYNAMIC_PUNCH
-	.short MOVE_HYPER_BEAM
-	.short MOVE_EXTREME_SPEED
-	.short MOVE_THIEF
-	.short MOVE_COVET
-	.short MOVE_ATTRACT
-	.short MOVE_SWAGGER
-	.short MOVE_TORMENT
-	.short MOVE_FLATTER
-	.short MOVE_TRICK
-	.short MOVE_SUPERPOWER
-	.short MOVE_SKILL_SWAP
-	.short -1
+	.2byte MOVE_SLEEP_POWDER
+	.2byte MOVE_LOVELY_KISS
+	.2byte MOVE_SPORE
+	.2byte MOVE_HYPNOSIS
+	.2byte MOVE_SING
+	.2byte MOVE_GRASS_WHISTLE
+	.2byte MOVE_SHADOW_PUNCH
+	.2byte MOVE_SAND_ATTACK
+	.2byte MOVE_SMOKESCREEN
+	.2byte MOVE_TOXIC
+	.2byte MOVE_GUILLOTINE
+	.2byte MOVE_HORN_DRILL
+	.2byte MOVE_FISSURE
+	.2byte MOVE_SHEER_COLD
+	.2byte MOVE_CROSS_CHOP
+	.2byte MOVE_AEROBLAST
+	.2byte MOVE_CONFUSE_RAY
+	.2byte MOVE_SWEET_KISS
+	.2byte MOVE_SCREECH
+	.2byte MOVE_COTTON_SPORE
+	.2byte MOVE_SCARY_FACE
+	.2byte MOVE_FAKE_TEARS
+	.2byte MOVE_METAL_SOUND
+	.2byte MOVE_THUNDER_WAVE
+	.2byte MOVE_GLARE
+	.2byte MOVE_POISON_POWDER
+	.2byte MOVE_SHADOW_BALL
+	.2byte MOVE_DYNAMIC_PUNCH
+	.2byte MOVE_HYPER_BEAM
+	.2byte MOVE_EXTREME_SPEED
+	.2byte MOVE_THIEF
+	.2byte MOVE_COVET
+	.2byte MOVE_ATTRACT
+	.2byte MOVE_SWAGGER
+	.2byte MOVE_TORMENT
+	.2byte MOVE_FLATTER
+	.2byte MOVE_TRICK
+	.2byte MOVE_SUPERPOWER
+	.2byte MOVE_SKILL_SWAP
+	.2byte -1
 
 AI_CV_AttackUp:
 	if_stat_level_less_than AI_USER, STAT_ATK, 9, AI_CV_AttackUp2
@@ -2775,9 +2775,9 @@ AI_PreferBatonPass_End:
 	end
 
 sMovesTable_ProtectMoves:
-	.short MOVE_PROTECT
-	.short MOVE_DETECT
-	.short -1
+	.2byte MOVE_PROTECT
+	.2byte MOVE_DETECT
+	.2byte -1
 
 AI_PreferBatonPass_EncourageIfHighStats:
 	get_turn_count

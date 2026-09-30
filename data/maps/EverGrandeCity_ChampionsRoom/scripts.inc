@@ -10,7 +10,7 @@ EverGrandeCity_ChampionsRoom_OnTransition:
 
 EverGrandeCity_ChampionsRoom_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, EverGrandeCity_ChampionsRoom_EventScript_PlayerTurnNorth
-	.short 0
+	.2byte 0
 
 EverGrandeCity_ChampionsRoom_EventScript_PlayerTurnNorth::
 	turnobject LOCALID_PLAYER, DIR_NORTH
@@ -18,7 +18,7 @@ EverGrandeCity_ChampionsRoom_EventScript_PlayerTurnNorth::
 
 EverGrandeCity_ChampionsRoom_OnFrame:
 	map_script_2 VAR_TEMP_1, 0, EverGrandeCity_ChampionsRoom_EventScript_EnterRoom
-	.short 0
+	.2byte 0
 
 EverGrandeCity_ChampionsRoom_EventScript_EnterRoom::
 	lockall

@@ -39,7 +39,7 @@ LavaridgeTown_EventScript_HideMapNamePopup::
 
 LavaridgeTown_OnFrame:
 	map_script_2 VAR_LAVARIDGE_TOWN_STATE, 1, LavaridgeTown_EventScript_RivalGiveGoGoggles
-	.short 0
+	.2byte 0
 
 LavaridgeTown_EventScript_RivalGiveGoGoggles::
 	lockall

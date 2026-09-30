@@ -38,7 +38,7 @@ LittlerootTown_MaysHouse_2F_EventScript_SetReadyToMeetMay::
 
 LittlerootTown_MaysHouse_2F_OnWarp:
 	map_script_2 VAR_SECRET_BASE_INITIALIZED, 0, LittlerootTown_MaysHouse_2F_EventScript_CheckInitDecor
-	.short 0
+	.2byte 0
 
 LittlerootTown_MaysHouse_2F_EventScript_CheckInitDecor::
 	checkplayergender

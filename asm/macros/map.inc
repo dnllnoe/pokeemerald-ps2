@@ -18,8 +18,8 @@
 
 	/* Defines an entry in a map script table (for either ON_WARP_INTO_MAP_TABLE or ON_FRAME_TABLE)*/
 	.macro map_script_2 var:req, compare:req, script:req
-	.short \var
-	.short \compare
+	.2byte \var
+	.2byte \compare
 	ptrvalue \script
 	.endm
 
@@ -34,10 +34,10 @@
 	.byte \movement_type
 	.byte ((\y_radius << 4) | \x_radius)
 	.space 1  /* Padding*/
-	.short \trainer_type
-	.short \sight_radius_tree_etc
+	.2byte \trainer_type
+	.2byte \sight_radius_tree_etc
 	ptrvalue \script
-	.short \event_flag
+	.2byte \event_flag
 	.space 2  /* Padding*/
 	space64 4
 	inc _num_npcs
@@ -62,7 +62,7 @@
 
 	/* Defines a warp event for map data. Mirrors the struct layout of WarpEvent in include/global.fieldmap.h*/
 	.macro warp_def x:req, y:req, elevation:req, warpId:req, map_id:req
-	.short \x, \y
+	.2byte \x, \y
 	.byte \elevation
 	.byte \warpId
 	.byte \map_id & 0xFF  /* map num*/
@@ -92,15 +92,15 @@
 	/* 'kind' is any BG_EVENT_* constant (see include/constants/event_bg.h).*/
 	/* 'arg6' and 'arg7' are used differently depending on the bg event type. See macros below*/
 	.macro bg_event x:req, y:req, elevation:req, kind:req, arg6:req, arg7
-	.short \x, \y
+	.2byte \x, \y
 	.byte \elevation
 	.byte \kind
 	.space 2  /* Padding*/
 	.if \kind != BG_EVENT_HIDDEN_ITEM
 		ptrvalue \arg6
 	.else
-		.short \arg6
-		.short \arg7
+		.2byte \arg6
+		.2byte \arg7
         space64 4
 	.endif
 	inc _num_signs

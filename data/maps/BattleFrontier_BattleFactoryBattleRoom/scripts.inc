@@ -26,7 +26,7 @@ BattleFrontier_BattleFactoryBattleRoom_EventScript_SetUpFactoryHeadObj::
 
 BattleFrontier_BattleFactoryBattleRoom_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattleFactoryBattleRoom_EventScript_HideObjects
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleFactoryBattleRoom_EventScript_HideObjects::
 	setvar VAR_TEMP_1, 1
@@ -46,7 +46,7 @@ BattleFrontier_BattleFactoryBattleRoom_EventScript_SetPlayerGfxFemale::
 
 BattleFrontier_BattleFactoryBattleRoom_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, BattleFrontier_BattleFactoryBattleRoom_EventScript_EnterRoom
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleFactoryBattleRoom_EventScript_EnterRoomFactoryHeadBattle::
 	msgbox BattleFrontier_BattleFactoryBattleRoom_Text_GetAMoveOn, MSGBOX_DEFAULT

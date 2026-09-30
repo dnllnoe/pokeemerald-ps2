@@ -9,7 +9,7 @@ TrainerHill_OnResume:
 
 TrainerHill_OnWarp:
 	map_script_2 VAR_TEMP_3, 0, TrainerHill_1F_EventScript_DummyOnWarp
-	.short 0
+	.2byte 0
 
 TrainerHill_1F_EventScript_DummyOnWarp::
 	setvar VAR_TEMP_3, 1
@@ -20,7 +20,7 @@ TrainerHill_1F_EventScript_DummyOnWarp::
 TrainerHill_OnFrame:
 	map_script_2 VAR_TEMP_2, 0, TrainerHill_1F_EventScript_DummyWarpToEntranceCounter
 	map_script_2 VAR_TEMP_1, 1, TrainerHill_EventScript_WarpToEntranceCounter
-	.short 0
+	.2byte 0
 
 EventScript_TrainerHillTimer::
 	lockall

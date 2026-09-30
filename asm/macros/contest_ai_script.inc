@@ -732,13 +732,13 @@
 	.macro setvar varId:req, num:req
 	.byte 0x71
 	.byte \varId
-	.short \num
+	.2byte \num
 	.endm
 
 	.macro add varId:req, num:req
 	.byte 0x72
 	.byte \varId
-	.short \num
+	.2byte \num
 	.endm
 
 	.macro addvar varId1:req, varId2:req
@@ -757,28 +757,28 @@
 	.macro if_less_than varId:req, num:req, destination:req
 	.byte 0x75
 	.byte \varId
-	.short \num
+	.2byte \num
 	ptrvalue \destination
 	.endm
 
 	.macro if_greater_than varId:req, num:req, destination:req
 	.byte 0x76
 	.byte \varId
-	.short \num
+	.2byte \num
 	ptrvalue \destination
 	.endm
 
 	.macro if_eq varId:req, num:req, destination:req
 	.byte 0x77
 	.byte \varId
-	.short \num
+	.2byte \num
 	ptrvalue \destination
 	.endm
 
 	.macro if_not_eq varId:req, num:req, destination:req
 	.byte 0x78
 	.byte \varId
-	.short \num
+	.2byte \num
 	ptrvalue \destination
 	.endm
 
@@ -854,17 +854,17 @@
 	/* This is used incorrectly to check for an effect; see ContestAICmd_check_user_has_move*/
 	.macro check_user_has_move move:req
 	.byte 0x85
-	.short \move
+	.2byte \move
 	.endm
 
 	.macro if_user_has_move move:req, destination:req
 	.byte 0x86
-	.short \move
+	.2byte \move
 	ptrvalue \destination
 	.endm
 
 	.macro if_user_doesnt_have_move move:req, destination:req
 	.byte 0x87
-	.short \move
+	.2byte \move
 	ptrvalue \destination
 	.endm

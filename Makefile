@@ -36,6 +36,11 @@ ifeq (macos,$(MAKECMDGOALS))
   PORTABLE := 1
   TARGET_OS := MACOS
 endif
+ifeq (ps2,$(MAKECMDGOALS))
+  PORTABLE := 1
+  TARGET_OS := PS2
+  override IS64BIT := 0
+endif
 
 # The PC builds' C compiler: gcc, or clang (the default on macOS)
 ifeq ($(TARGET_OS),MACOS)
@@ -95,6 +100,9 @@ ifeq ($(PORTABLE),1)
   else ifeq ($(TARGET_OS),MACOS)
     PORTABLE_DIR_PREFIX := macos
     PREFIX :=
+  else ifeq ($(TARGET_OS),PS2)
+    PORTABLE_DIR_PREFIX := ps2
+    PREFIX := mips64r5900el-ps2-elf-
   else # LINUX
     PREFIX :=
   endif # TARGET_OS
@@ -157,6 +165,21 @@ ifeq ($(PORTABLE),1)
     # The data has pointers at any address, like inside scripts, which chained
     # fixups can't hold
     OS_LFLAGS := -Wl,-no_fixup_chains
+  else ifeq ($(TARGET_OS),PS2)
+    # cc1 and as run on their own, so they need what the gcc driver would pass.
+    # -G0 keeps small variables out of .sbss, so that gba_ram holds them all.
+    PS2SDK ?= /usr/local/ps2dev/ps2sdk
+    EE_ARCH := -march=r5900 -mhard-float -msingle-float -mno-shared -G0
+    OS_CFLAGS := $(EE_ARCH) -mno-llsc -mplt -D_EE
+    PS2_ASFLAGS := -EL -mabi=n32 $(EE_ARCH) -call_nonpic
+    # SDL_main.h renames main to SDL_main on __PS2__, which gcc doesn't define.
+    # SDL2main's main resets the IOP and loads the drivers first.
+    PLATFORM_INCLUDES += -D_EE -D__PS2__ -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include -I$(PS2SDK)/ports/include -I$(PS2DEV)/gsKit/include
+    OS_LFLAGS := -Tld_script_ps2.ld -L$(PS2SDK)/ee/lib -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib -Wl,-zmax-page-size=128
+    BUILD_FEXTENSION := .elf
+    # MIPS as pads .int and .short to their size, which would move the
+    # unaligned values in the scripts. The data uses .4byte and .2byte.
+    ASM_PSEUDO_OP_CONV := cat
   else ifeq ($(IS64BIT),1)
     # Build position independent, so nothing can rely on addresses fitting in 32 bits
     OS_CFLAGS := -fPIE
@@ -184,6 +207,8 @@ ifeq ($(PORTABLE),1)
     endif
     PLATFORM_INCLUDES += -I$(SDL_PREFIX)/include
     PLATFORM_LFLAGS += -L$(SDL_PREFIX)/lib -lSDL2 -lm
+  else ifeq ($(TARGET_OS),PS2)
+    PLATFORM_LFLAGS += -lSDL2main -lSDL2 -lm -lpatches -lgskit -ldmakit -lps2_drivers
   else
     PLATFORM_LFLAGS += -lSDL2main -lSDL2 -lm
   endif
@@ -257,7 +282,7 @@ SHELL := bash -o pipefail
 
 # Set flags for tools
 ifeq ($(PORTABLE),1)
-  ASFLAGS := --$(BIT_WIDTH) $(ASFLAGS64) --defsym VER_64BIT=$(IS64BIT) --defsym MODERN=$(MODERN) --defsym PORTABLE=1 --defsym UBFIX=1
+  ASFLAGS := $(if $(PS2_ASFLAGS),$(PS2_ASFLAGS),--$(BIT_WIDTH)) $(ASFLAGS64) --defsym VER_64BIT=$(IS64BIT) --defsym MODERN=$(MODERN) --defsym PORTABLE=1 --defsym UBFIX=1
   ifeq ($(TARGET_OS),MACOS)
     # x86_64-elf-as takes / as the start of a comment, like SVR4, which would
     # quietly cut short the songs' expressions. The Linux one doesn't.
@@ -291,11 +316,11 @@ else ifeq ($(PORTABLE),1)
     CC1 :=
   else
     MODERNCC := $(PREFIX)gcc
-    CPP := $(PREFIX)cpp -m$(BIT_WIDTH)
+    CPP := $(PREFIX)cpp $(if $(PS2_ASFLAGS),,-m$(BIT_WIDTH))
     CC1 	:= $(shell $(PREFIX)gcc --print-prog-name=cc1) -quiet
   endif
   PATH_MODERNCC := PATH="$(PATH)" $(MODERNCC)
-  override CFLAGS += $(OS_CFLAGS) $(PLATFORM_CFLAGS) -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=int-conversion -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast -Wno-trigraphs -Wimplicit -Wparentheses -Wunused -m$(BIT_WIDTH) -std=gnu99 $(LEADING_UNDERSCORE_FLAG) -fno-common -fno-builtin -Wno-unused-function -DPORTABLE -DNONMATCHING -D UBFIX -DMODERN=$(MODERN)
+  override CFLAGS += $(OS_CFLAGS) $(PLATFORM_CFLAGS) -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=int-conversion -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast -Wno-trigraphs -Wimplicit -Wparentheses -Wunused $(if $(PS2_ASFLAGS),,-m$(BIT_WIDTH)) -std=gnu99 $(LEADING_UNDERSCORE_FLAG) -fno-common -fno-builtin -Wno-unused-function -DPORTABLE -DNONMATCHING -D UBFIX -DMODERN=$(MODERN)
   # The same floating point results everywhere, which the tests' frame hashes
   # need: on ARM, compilers would otherwise fuse multiplies and adds
   override CFLAGS += -ffp-contract=off
@@ -377,7 +402,7 @@ MAKEFLAGS += --no-print-directory
 .DELETE_ON_ERROR:
 
 RULES_NO_SCAN += libagbsyscall clean clean-assets tidy tidymodern tidynonmodern generated clean-generated
-.PHONY: all rom modern compare winwsl linux macos
+.PHONY: all rom modern compare winwsl linux macos ps2
 .PHONY: $(RULES_NO_SCAN)
 
 infoshell = $(foreach line, $(shell $1 | sed "s/ /__SPACE__/g"), $(info $(subst __SPACE__, ,$(line))))
@@ -458,6 +483,7 @@ compare: all
 winwsl: all
 linux: all
 macos: all
+ps2: all
 
 # Other rules
 rom: $(ROM)

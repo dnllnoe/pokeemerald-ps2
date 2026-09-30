@@ -89,7 +89,7 @@ Route110_TrickHousePuzzle7_OnLoad:
 
 Route110_TrickHousePuzzle7_OnFrame:
 	map_script_2 VAR_TRICK_HOUSE_PUZZLE_7_STATE_2, 1, Route110_TrickHousePuzzle7_EventScript_ClearState2
-	.short 0
+	.2byte 0
 
 Route110_TrickHousePuzzle7_EventScript_ClearState2::
 	setvar VAR_TRICK_HOUSE_PUZZLE_7_STATE_2, 0

@@ -7,7 +7,7 @@ BattleFrontier_BattlePikeRoomNormal_MapScripts::
 
 BattleFrontier_BattlePikeRoomNormal_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, BattleFrontier_BattlePikeRoomNormal_EventScript_EnterRoom
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattlePikeRoomNormal_EventScript_EnterRoom::
 	setvar VAR_TEMP_0, 1

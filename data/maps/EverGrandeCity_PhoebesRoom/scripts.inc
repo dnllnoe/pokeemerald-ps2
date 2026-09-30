@@ -6,7 +6,7 @@ EverGrandeCity_PhoebesRoom_MapScripts::
 
 EverGrandeCity_PhoebesRoom_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, EverGrandeCity_PhoebesRoom_EventScript_PlayerTurnNorth
-	.short 0
+	.2byte 0
 
 EverGrandeCity_PhoebesRoom_EventScript_PlayerTurnNorth::
 	turnobject LOCALID_PLAYER, DIR_NORTH
@@ -14,7 +14,7 @@ EverGrandeCity_PhoebesRoom_EventScript_PlayerTurnNorth::
 
 EverGrandeCity_PhoebesRoom_OnFrame:
 	map_script_2 VAR_ELITE_4_STATE, 1, EverGrandeCity_PhoebesRoom_EventScript_WalkInCloseDoor
-	.short 0
+	.2byte 0
 
 EverGrandeCity_PhoebesRoom_EventScript_WalkInCloseDoor::
 	lockall

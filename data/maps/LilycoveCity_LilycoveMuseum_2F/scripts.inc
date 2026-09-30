@@ -58,7 +58,7 @@ LilycoveCity_LilycoveMuseum_2F_EventScript_SetToughPainting::
 
 LilycoveCity_LilycoveMuseum_2F_OnFrame:
 	map_script_2 VAR_LILYCOVE_MUSEUM_2F_STATE, 0, LilycoveCity_LilycoveMuseum_2F_EventScript_ShowExhibitHall
-	.short 0
+	.2byte 0
 
 LilycoveCity_LilycoveMuseum_2F_EventScript_ShowExhibitHall::
 	lockall

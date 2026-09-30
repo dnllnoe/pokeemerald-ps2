@@ -12,7 +12,7 @@ BattleFrontier_BattlePyramidTop_OnTransition:
 
 BattleFrontier_BattlePyramidTop_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattlePyramidTop_EventScript_SetUpObjects
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattlePyramidTop_EventScript_SetUpObjects::
 	setvar VAR_TEMP_1, 1
@@ -42,7 +42,7 @@ BattleFrontier_BattlePyramidTop_EventScript_CheckChallengeStatus::
 BattleFrontier_BattlePyramidTop_OnFrame:
 	map_script_2 VAR_TEMP_PLAYING_PYRAMID_MUSIC, 0, BattleFrontier_BattlePyramidTop_EventScript_PlayPyramidMusic
 	map_script_2 VAR_TEMP_F, 1, BattleFrontier_BattlePyramidTop_EventScript_ShowMapName
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattlePyramidTop_EventScript_PlayPyramidMusic::
 	playbgm MUS_B_PYRAMID_TOP, FALSE

@@ -5,7 +5,7 @@ BattleFrontier_BattleFactoryPreBattleRoom_MapScripts::
 
 BattleFrontier_BattleFactoryPreBattleRoom_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattleFactoryPreBattleRoom_EventScript_SetUpObjects
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleFactoryPreBattleRoom_EventScript_SetUpObjects::
 	setvar VAR_TEMP_1, 1
@@ -18,7 +18,7 @@ BattleFrontier_BattleFactoryPreBattleRoom_EventScript_TurnPlayerNorth::
 
 BattleFrontier_BattleFactoryPreBattleRoom_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, BattleFrontier_BattleFactoryPreBattleRoom_EventScript_EnterRoom
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleFactoryPreBattleRoom_EventScript_EnterRoom::
 	goto_if_eq VAR_0x8006, 1, BattleFrontier_BattleFactoryPreBattleRoom_EventScript_ReturnToRoomFromBattle

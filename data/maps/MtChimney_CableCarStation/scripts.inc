@@ -14,7 +14,7 @@ MtChimney_CableCarStation_EventScript_MoveAttendantAside::
 
 MtChimney_CableCarStation_OnFrame:
 	map_script_2 VAR_CABLE_CAR_STATION_STATE, 1, MtChimney_CableCarStation_EventScript_ExitCableCar
-	.short 0
+	.2byte 0
 
 MtChimney_CableCarStation_EventScript_ExitCableCar::
 	lockall

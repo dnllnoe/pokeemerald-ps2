@@ -7,7 +7,7 @@ LilycoveCity_PokemonTrainerFanClub_MapScripts::
 
 LilycoveCity_PokemonTrainerFanClub_OnFrame:
 	map_script_2 VAR_LILYCOVE_FAN_CLUB_STATE, 1, LilycoveCity_PokemonTrainerFanClub_EventScript_MeetFirstFans
-	.short 0
+	.2byte 0
 
 LilycoveCity_PokemonTrainerFanClub_EventScript_MeetFirstFans::
 	lockall

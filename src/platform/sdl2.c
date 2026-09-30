@@ -20,6 +20,9 @@
 #include "gba/flash_internal.h"
 #include "platform/dma.h"
 #include "platform/framedraw.h"
+#ifdef __PS2__
+#include "platform/ps2_gs.h"
+#endif
 #include "platform/settings.h"
 #include "platform/system.h"
 #include "platform/test_state.h"
@@ -63,6 +66,12 @@ static FILE *sTestState;
 
 extern void AgbMain(void);
 
+#ifdef __PS2__
+// From the PS2 kernel. kernel.h can't be included next to the game's types.
+extern int ChangeThreadPriority(int threadId, int priority);
+extern int GetThreadId(void);
+#endif
+
 int DoMain(void *param);
 void ProcessEvents(void);
 void VDraw(SDL_Texture *texture);
@@ -82,6 +91,13 @@ static int RunTestMode(void);
 
 int main(int argc, char **argv)
 {
+#ifdef __PS2__
+    // The PS2 kernel doesn't share time between threads, it runs the highest
+    // priority one that's ready. The main thread starts at 1, above SDL's audio
+    // thread (16), and it never waits, so the sound would never play.
+    ChangeThreadPriority(GetThreadId(), 64);
+#endif
+
     if (!ParseArgs(argc, argv))
         return 1;
 
@@ -109,7 +125,12 @@ int main(int argc, char **argv)
     if (sTestMode)
         return RunTestMode();
 
+#ifdef __PS2__
+    // The picture is drawn with the GS directly (see ps2_gs.c)
+    if(SDL_Init(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0)
+#else
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0)
+#endif
     {
         DBGPRINTF("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 1;
@@ -130,19 +151,24 @@ int main(int argc, char **argv)
         }
     }
 
+#ifdef __PS2__
+    PS2GS_Init();
+#else
     videoScale = gSettings.scale;
     sdlWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale,
                                  SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | (gSettings.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     if (sdlWindow == NULL)
     {
-        DBGPRINTF("Window could not be created! SDL_Error: %s\n", SDL_GetError());
+        DBGPRINTF("Window could not be created! SDL_Error: %s
+", SDL_GetError());
         return 1;
     }
 
     sdlRenderer = SDL_CreateRenderer(sdlWindow, -1, SDL_RENDERER_PRESENTVSYNC);
     if (sdlRenderer == NULL)
     {
-        DBGPRINTF("Renderer could not be created! SDL_Error: %s\n", SDL_GetError());
+        DBGPRINTF("Renderer could not be created! SDL_Error: %s
+", SDL_GetError());
         return 1;
     }
 
@@ -159,10 +185,12 @@ int main(int argc, char **argv)
                                    DISPLAY_WIDTH, DISPLAY_HEIGHT);
     if (sdlTexture == NULL)
     {
-        DBGPRINTF("Texture could not be created! SDL_Error: %s\n", SDL_GetError());
+        DBGPRINTF("Texture could not be created! SDL_Error: %s
+", SDL_GetError());
         return 1;
     }
 
+#endif
     simTime = curGameTime = lastGameTime = SDL_GetPerformanceCounter();
 
     isFrameAvailable.value = 0;
@@ -242,8 +270,16 @@ int main(int argc, char **argv)
 
         lastGameTime = curGameTime;
 
+#ifdef __PS2__
+        // Waits for the vertical blank, which paces the loop
+        if (isGameStepDrawn)
+            PS2GS_Present();
+        else
+            SDL_Delay(1);
+#else
         SDL_RenderCopy(sdlRenderer, sdlTexture, NULL, NULL);
         SDL_RenderPresent(sdlRenderer);
+#endif
     }
 
     CloseSaveFile();
@@ -325,6 +361,14 @@ static u64 HashBytes(u64 hash, const void *data, size_t size)
     return hash;
 }
 
+#ifdef __PS2__
+// The PS2 runs several frames in a row between drawing them, which it takes a
+// while to do, so the sound comes in bursts that need more room
+#define MAX_QUEUED_FRAMES 12
+#else
+#define MAX_QUEUED_FRAMES 8
+#endif
+
 void Platform_QueueAudio(float *audioBuffer, s32 samplesPerFrame)
 {
     if (sTestMode)
@@ -343,8 +387,19 @@ void Platform_QueueAudio(float *audioBuffer, s32 samplesPerFrame)
         static const float sSilence[MIXED_AUDIO_BUFFER_SIZE * 2];
         Uint32 queued = SDL_GetQueuedAudioSize(1);
 
-        if (queued > (Uint32)samplesPerFrame * 8)
+#ifdef __PS2__
+        // The PS2's device plays a little slower than the game makes sound, so
+        // the queue fills up slowly. Cutting the end off a frame catches up
+        // without the gap that dropping the whole frame leaves. Much further
+        // ahead, like when it's sped up, it still drops frames.
+        if (queued > (Uint32)samplesPerFrame * MAX_QUEUED_FRAMES * 2)
             return;
+        if (queued > (Uint32)samplesPerFrame * MAX_QUEUED_FRAMES)
+            samplesPerFrame -= (samplesPerFrame / 10) & ~7;
+#else
+        if (queued > (Uint32)samplesPerFrame * MAX_QUEUED_FRAMES)
+            return;
+#endif
         if (queued == 0)
         {
             for (int i = 0; i < 3; i++)
@@ -444,11 +499,15 @@ u16 Platform_GetKeyInput(void)
 
 void VDraw(SDL_Texture *texture)
 {
+#ifdef __PS2__
+    DrawFramePS2();
+#else
     static uint16_t image[DISPLAY_WIDTH * DISPLAY_HEIGHT];
 
     memset(image, 0, sizeof(image));
     DrawFrame(image);
     SDL_UpdateTexture(texture, NULL, image, DISPLAY_WIDTH * sizeof (Uint16));
+#endif
     REG_VCOUNT = 161; // prep for being in VBlank period
 }
 

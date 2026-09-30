@@ -28,7 +28,7 @@ SkyPillar_Outside_EventScript_OpenDoor::
 
 SkyPillar_Outside_OnFrame:
 	map_script_2 VAR_SOOTOPOLIS_CITY_STATE, 3, SkyPillar_Outside_EventScript_WallaceScene
-	.short 0
+	.2byte 0
 
 SkyPillar_Outside_EventScript_WallaceScene::
 	lockall

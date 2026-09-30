@@ -23,7 +23,7 @@ MossdeepCity_StevensHouse_EventScript_SetStevenPos::
 
 MossdeepCity_StevensHouse_OnFrame:
 	map_script_2 VAR_STEVENS_HOUSE_STATE, 1, MossdeepCity_StevensHouse_EventScript_StevenGivesDive
-	.short 0
+	.2byte 0
 
 MossdeepCity_StevensHouse_EventScript_StevenGivesDive::
 	lockall

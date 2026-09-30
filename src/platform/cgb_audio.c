@@ -13,7 +13,13 @@
 
 // The resampling filter: TAPS input samples per output sample, with its
 // coefficients worked out for PHASES positions between input samples
+#ifdef __PS2__
+// Half the taps, which is half the work, for a softer cutoff: the full filter
+// alone takes a fifth of the PS2's time
+#define TAPS 32
+#else
 #define TAPS 64
+#endif
 #define PHASES 512
 #define HIGH_RATE_CAPACITY 2048
 
@@ -24,8 +30,12 @@ static float sCoefficients[PHASES + 1][TAPS];
 static bool8 sCoefficientsReady;
 static float sHighRate[HIGH_RATE_CAPACITY][2];
 static u32 sHighRateCount;
-// Where the next output sample is in sHighRate, in units of 1/sampleRate samples
-static u64 sResamplePos;
+// Where the next output sample is in sHighRate: the sample before it, and how
+// far past that one it is in units of 1/sampleRate samples. Kept apart instead
+// of as one count, which would need a 64-bit division every sample, and that's
+// slow on 32-bit CPUs without one, like the PS2's.
+static u32 sResampleIndex;
+static u32 sResampleFrac;
 
 // The duty cycles' steps, with each at the same level on average, as the GBA's
 // output has its DC removed, so a volume change doesn't click
@@ -83,7 +93,8 @@ void cgb_audio_init(u32 rate){
     // Silence to start, so the filter has what came before the first sample
     memset(sHighRate, 0, sizeof(sHighRate));
     sHighRateCount = TAPS / 2 - 1;
-    sResamplePos = (u64)(TAPS / 2 - 1) * sampleRate;
+    sResampleIndex = TAPS / 2 - 1;
+    sResampleFrac = 0;
 }
 
 
@@ -330,7 +341,7 @@ void cgb_audio_generate(u16 samplesPerFrame){
     float *outBuffer = gb.outBuffer;
 
     for(u16 i = 0; i < samplesPerFrame; i++, outBuffer += 2){
-        u32 center = sResamplePos / sampleRate;
+        u32 center = sResampleIndex;
         u32 first = center - (TAPS / 2 - 1);
         const float *coefficients;
         float outputL = 0;
@@ -340,20 +351,24 @@ void cgb_audio_generate(u16 samplesPerFrame){
             // Drop the samples that have been filtered for the last time
             memmove(sHighRate, sHighRate[first], (sHighRateCount - first) * sizeof(sHighRate[0]));
             sHighRateCount -= first;
-            sResamplePos -= (u64)first * sampleRate;
+            sResampleIndex -= first;
             first = 0;
         }
         while(sHighRateCount < first + TAPS)
             GenerateSample(sHighRate[sHighRateCount++]);
 
-        coefficients = sCoefficients[((sResamplePos % sampleRate) * PHASES + sampleRate / 2) / sampleRate];
+        coefficients = sCoefficients[(sResampleFrac * PHASES + sampleRate / 2) / sampleRate];
         for(u32 tap = 0; tap < TAPS; tap++){
             outputL += coefficients[tap] * sHighRate[first + tap][0];
             outputR += coefficients[tap] * sHighRate[first + tap][1];
         }
         outBuffer[0] = outputL;
         outBuffer[1] = outputR;
-        sResamplePos += APU_RATE;
+        sResampleFrac += APU_RATE;
+        while(sResampleFrac >= sampleRate){
+            sResampleFrac -= sampleRate;
+            sResampleIndex++;
+        }
     }
 }
 

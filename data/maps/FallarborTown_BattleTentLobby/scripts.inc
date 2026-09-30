@@ -5,7 +5,7 @@ FallarborTown_BattleTentLobby_MapScripts::
 
 FallarborTown_BattleTentLobby_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, FallarborTown_BattleTentLobby_EventScript_TurnPlayerNorth
-	.short 0
+	.2byte 0
 
 FallarborTown_BattleTentLobby_EventScript_TurnPlayerNorth::
 	setvar VAR_TEMP_1, 1
@@ -18,7 +18,7 @@ FallarborTown_BattleTentLobby_OnFrame:
 	map_script_2 VAR_TEMP_CHALLENGE_STATUS, CHALLENGE_STATUS_PAUSED, FallarborTown_BattleTentLobby_EventScript_ResumeChallenge
 	map_script_2 VAR_TEMP_CHALLENGE_STATUS, CHALLENGE_STATUS_WON, FallarborTown_BattleTentLobby_EventScript_WonChallenge
 	map_script_2 VAR_TEMP_CHALLENGE_STATUS, CHALLENGE_STATUS_LOST, FallarborTown_BattleTentLobby_EventScript_LostChallenge
-	.short 0
+	.2byte 0
 
 FallarborTown_BattleTentLobby_EventScript_GetChallengeStatus::
 	frontier_getstatus

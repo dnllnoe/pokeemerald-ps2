@@ -5,7 +5,7 @@ SafariZone_South_MapScripts::
 
 SafariZone_South_OnFrame:
 	map_script_2 VAR_SAFARI_ZONE_STATE, 2, SafariZone_South_EventScript_EnterSafariZone
-	.short 0
+	.2byte 0
 
 SafariZone_South_EventScript_EnterSafariZone::
 	lockall

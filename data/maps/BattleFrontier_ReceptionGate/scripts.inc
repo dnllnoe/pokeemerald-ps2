@@ -9,7 +9,7 @@ BattleFrontier_ReceptionGate_OnTransition:
 
 BattleFrontier_ReceptionGate_OnFrame:
 	map_script_2 VAR_HAS_ENTERED_BATTLE_FRONTIER, 0, BattleFrontier_ReceptionGate_EventScript_FirstTimeEntering
-	.short 0
+	.2byte 0
 
 BattleFrontier_ReceptionGate_EventScript_FirstTimeEntering::
 	lockall

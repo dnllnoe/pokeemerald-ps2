@@ -155,22 +155,22 @@
 	.warning "setvar with a value that might be a VAR_ constant; did you mean copyvar instead?"
 	.endif
 	.byte SCR_OP_SETVAR
-	.short \destination
-	.short \value
+	.2byte \destination
+	.2byte \value
 	.endm
 
 	/* Changes the value of destination by adding value to it. Overflow is not prevented (0xFFFF + 1 = 0x0000).*/
 	.macro addvar destination:req, value:req
 	.byte SCR_OP_ADDVAR
-	.short \destination
-	.short \value
+	.2byte \destination
+	.2byte \value
 	.endm
 
 	/* Changes the value of destination by subtracting value to it. Overflow is not prevented (0x0000 - 1 = 0xFFFF).*/
 	.macro subvar destination:req, value:req
 	.byte SCR_OP_SUBVAR
-	.short \destination
-	.short \value
+	.2byte \destination
+	.2byte \value
 	.endm
 
 	@ Copies the value of source into destination.
@@ -179,15 +179,15 @@
 	.warning "copyvar with a value that is not a VAR_ constant; did you mean setvar instead?"
 	.endif
 	.byte SCR_OP_COPYVAR
-	.short \destination
-	.short \source
+	.2byte \destination
+	.2byte \source
 	.endm
 
 	/* If source is not a variable, then this function acts like setvar. Otherwise, it acts like copyvar.*/
 	.macro setorcopyvar destination:req, source:req
 	.byte SCR_OP_SETORCOPYVAR
-	.short \destination
-	.short \source
+	.2byte \destination
+	.2byte \source
 	.endm
 
 	/* Compares the values of the script data at indexes 'local1' and 'local2'.*/
@@ -242,16 +242,16 @@
 	/* The result is stored in comparisonResult to be acted on by goto_if / call_if*/
 	.macro compare_var_to_value var:req, value:req
 	.byte SCR_OP_COMPARE_VAR_TO_VALUE
-	.short \var
-	.short \value
+	.2byte \var
+	.2byte \value
 	.endm
 
 	/* Compares the value of 'var1' to the value of 'var2'.*/
 	/* The result is stored in comparisonResult to be acted on by goto_if / call_if*/
 	.macro compare_var_to_var var1:req, var2:req
 	.byte SCR_OP_COMPARE_VAR_TO_VAR
-	.short \var1
-	.short \var2
+	.2byte \var1
+	.2byte \var2
 	.endm
 
 	/* Generic compare macro which attempts to deduce argument types based on their values*/
@@ -279,7 +279,7 @@
 	/* Calls a function listed in the table in data/specials.inc.*/
 	.macro special function:req
 	.byte SCR_OP_SPECIAL
-	.short SPECIAL_\function
+	.2byte SPECIAL_\function
 	.if SPECIAL_WAITSTATE_\function
 	waitstate implicit=1
 	.endif
@@ -289,8 +289,8 @@
 	/* That function's output (if any) will be written to the variable specified by 'output'.*/
 	.macro specialvar output:req, function:req
 	.byte SCR_OP_SPECIALVAR
-	.short \output
-	.short SPECIAL_\function
+	.2byte \output
+	.2byte SPECIAL_\function
 	.if SPECIAL_WAITSTATE_\function
 	waitstate implicit=1
 	.endif
@@ -315,33 +315,33 @@
 	/* Blocks script execution for frames. (Pokemon Emerald runs at just shy of 60 frames per second.)*/
 	.macro delay frames:req
 	.byte SCR_OP_DELAY
-	.short \frames
+	.2byte \frames
 	.endm
 
 	/* Sets flag to TRUE.*/
 	.macro setflag flag:req
 	.byte SCR_OP_SETFLAG
-	.short \flag
+	.2byte \flag
 	.endm
 
 	/* Sets flag to FALSE.*/
 	.macro clearflag flag:req
 	.byte SCR_OP_CLEARFLAG
-	.short \flag
+	.2byte \flag
 	.endm
 
 	/* Compares flag to TRUE and stores the result in comparisonResult to be used by goto_if, etc*/
 	/* See additional _if_unset and _if_set macros*/
 	.macro checkflag flag:req
 	.byte SCR_OP_CHECKFLAG
-	.short \flag
+	.2byte \flag
 	.endm
 
 	/* Initializes the RTC`s local time offset to the given hour and minute.*/
 	.macro initclock hour:req, minute:req
 	.byte SCR_OP_INITCLOCK
-	.short \hour
-	.short \minute
+	.2byte \hour
+	.2byte \minute
 	.endm
 
 	/* Updates local time using the RTC and runs time based events.*/
@@ -357,7 +357,7 @@
 	/* Plays the specified sound. Only one sound may play at a time, with newer ones interrupting older ones.*/
 	.macro playse song:req
 	.byte SCR_OP_PLAYSE
-	.short \song
+	.2byte \song
 	.endm
 
 	/* Blocks script execution until the currently-playing sound (triggered by playse) finishes playing.*/
@@ -368,7 +368,7 @@
 	/* Plays the fanfare specified by the song number. If the specified song is not a fanfare it will instead play the first song in sFanfares.*/
 	.macro playfanfare song:req
 	.byte SCR_OP_PLAYFANFARE
-	.short \song
+	.2byte \song
 	.endm
 
 	/* Blocks script execution until all currently-playing fanfares finish.*/
@@ -380,7 +380,7 @@
 	/* specified song will be saved as if savebgm was called with it.*/
 	.macro playbgm song:req, save_song:req
 	.byte SCR_OP_PLAYBGM
-	.short \song
+	.2byte \song
 	.byte \save_song
 	.endm
 
@@ -388,7 +388,7 @@
 	/* exiting most warps.*/
 	.macro savebgm song:req
 	.byte SCR_OP_SAVEBGM
-	.short \song
+	.2byte \song
 	.endm
 
 	/* Crossfades the currently-playing song into the map's default song.*/
@@ -399,7 +399,7 @@
 	/* Crossfades the currently-playing song into the specified song.*/
 	.macro fadenewbgm song:req
 	.byte SCR_OP_FADENEWBGM
-	.short \song
+	.2byte \song
 	.endm
 
 	/* Fades out the currently-playing song.*/
@@ -428,22 +428,22 @@
 	map \map
 	.ifb \a /* No arguments provided, use dummy warpId and coords.*/
 		.byte WARP_ID_NONE
-		.short -1 /* x*/
-		.short -1 /* y*/
+		.2byte -1 /* x*/
+		.2byte -1 /* y*/
 	.else
 	.ifb \b /* Only one argument provided, treat it as a warpId and use dummy coords.*/
 		.byte \a   /* warpId*/
-		.short -1  /* x*/
-		.short -1  /* y*/
+		.2byte -1  /* x*/
+		.2byte -1  /* y*/
 	.else
 	.ifb \c /* Only two arguments provided, treat them as a coord pair and use dummy warpId.*/
 		.byte WARP_ID_NONE
-		.short \a  /* x*/
-		.short \b  /* y*/
+		.2byte \a  /* x*/
+		.2byte \b  /* y*/
 	.else /* All three arguments provided. Output them and let the warp sort out which to use.*/
 		.byte \a  /* warpId*/
-		.short \b /* x*/
-		.short \c /* y*/
+		.2byte \b /* x*/
+		.2byte \c /* y*/
 	.endif
 	.endif
 	.endif
@@ -531,8 +531,8 @@
 	/* Retrieves the player's zero-indexed x- and y-coordinates in the map, and stores them in the specified variables.*/
 	.macro getplayerxy x:req, y:req
 	.byte SCR_OP_GETPLAYERXY
-	.short \x
-	.short \y
+	.2byte \x
+	.2byte \y
 	.endm
 
 	/* Retrieves the number of Pokemon in the player's party, and stores that number in VAR_RESULT.*/
@@ -544,90 +544,90 @@
 	/* be added and VAR_RESULT will be set to TRUE; otherwise, VAR_RESULT is set to FALSE.*/
 	.macro additem itemId:req, quantity=1
 	.byte SCR_OP_ADDITEM
-	.short \itemId
-	.short \quantity
+	.2byte \itemId
+	.2byte \quantity
 	.endm
 
 	/* Removes quantity of the specified item from the player's Bag. If the player has fewer than 'quantity' in their bag*/
 	/* then none will be removed and VAR_RESULT will be set to FALSE. Otherwise it will be set to TRUE.*/
 	.macro removeitem itemId:req, quantity=1
 	.byte SCR_OP_REMOVEITEM
-	.short \itemId
-	.short \quantity
+	.2byte \itemId
+	.2byte \quantity
 	.endm
 
 	/* Checks if the player has enough space in their Bag to hold quantity more of the specified item. Sets VAR_RESULT to*/
 	/* TRUE if there is room, or FALSE is there is no room.*/
 	.macro checkitemspace itemId:req, quantity=1
 	.byte SCR_OP_CHECKITEMSPACE
-	.short \itemId
-	.short \quantity
+	.2byte \itemId
+	.2byte \quantity
 	.endm
 
 	/* Checks if the player has quantity or more of the specified item in their Bag. Sets VAR_RESULT to TRUE if the player has*/
 	/* enough of the item, or FALSE if they have fewer than quantity of the item.*/
 	.macro checkitem itemId:req, quantity=1
 	.byte SCR_OP_CHECKITEM
-	.short \itemId
-	.short \quantity
+	.2byte \itemId
+	.2byte \quantity
 	.endm
 
 	/* Checks which Bag pocket the specified item belongs in, and writes the pocket value (POCKET_*) to VAR_RESULT.*/
 	/* This is used to show the name of the proper Bag pocket when the player receives an item via callstd.*/
 	.macro checkitemtype itemId:req
 	.byte SCR_OP_CHECKITEMTYPE
-	.short \itemId
+	.2byte \itemId
 	.endm
 
 	/* Adds quantity of the specified item to the player's PC.*/
 	.macro addpcitem itemId:req, quantity=1
 	.byte SCR_OP_ADDPCITEM
-	.short \itemId
-	.short \quantity
+	.2byte \itemId
+	.2byte \quantity
 	.endm
 
 	/* Checks for quantity of the specified item in the player's PC.*/
 	.macro checkpcitem itemId:req, quantity=1
 	.byte SCR_OP_CHECKPCITEM
-	.short \itemId
-	.short \quantity
+	.2byte \itemId
+	.2byte \quantity
 	.endm
 
 	/* Adds a decoration to the player's PC.*/
 	.macro adddecoration decoration:req
 	.byte SCR_OP_ADDDECORATION
-	.short \decoration
+	.2byte \decoration
 	.endm
 
 	/* Removes a decoration from the player's PC.*/
 	.macro removedecoration decoration:req
 	.byte SCR_OP_REMOVEDECORATION
-	.short \decoration
+	.2byte \decoration
 	.endm
 
 	/* Checks for decoration in the player's PC.*/
 	.macro checkdecor decoration:req
 	.byte SCR_OP_CHECKDECOR
-	.short \decoration
+	.2byte \decoration
 	.endm
 
 	/* Checks if the player has enough space in their PC to hold the decoration.*/
 	/* Sets VAR_RESULT to TRUE if there is room, or FALSE is there is no room.*/
 	.macro checkdecorspace decoration:req
 	.byte SCR_OP_CHECKDECORSPACE
-	.short \decoration
+	.2byte \decoration
 	.endm
 
 	/* Applies the movement data at movements to the specified (localId) object. If no map is specified, then the current map is used.*/
 	.macro applymovement localId:req, movements:req, map
 		.ifb \map
 			.byte SCR_OP_APPLYMOVEMENT
-			.short \localId
+			.2byte \localId
 			ptrvalue \movements
 		.else
 			@ Really only useful if the object has followed from one map to another (e.g. Wally during the catching event).
 			.byte SCR_OP_APPLYMOVEMENTAT
-			.short \localId
+			.2byte \localId
 			ptrvalue \movements
 			map \map
 		.endif
@@ -640,10 +640,10 @@
 	.macro waitmovement localId=LOCALID_NONE, map
 		.ifb \map
 			.byte SCR_OP_WAITMOVEMENT
-			.short \localId
+			.2byte \localId
 		.else
 			.byte SCR_OP_WAITMOVEMENTAT
-			.short \localId
+			.2byte \localId
 			map \map
 		.endif
 	.endm
@@ -654,10 +654,10 @@
 	.macro removeobject localId:req, map
 		.ifb \map
 			.byte SCR_OP_REMOVEOBJECT
-			.short \localId
+			.2byte \localId
 		.else
 			.byte SCR_OP_REMOVEOBJECTAT
-			.short \localId
+			.2byte \localId
 			map \map
 		.endif
 	.endm
@@ -668,10 +668,10 @@
 	.macro addobject localId:req, map
 		.ifb \map
 			.byte SCR_OP_ADDOBJECT
-			.short \localId
+			.2byte \localId
 		.else
 			.byte SCR_OP_ADDOBJECTAT
-			.short \localId
+			.2byte \localId
 			map \map
 		.endif
 	.endm
@@ -679,22 +679,22 @@
 	/* Sets the specified (localId) object's position on the current map.*/
 	.macro setobjectxy localId:req, x:req, y:req
 	.byte SCR_OP_SETOBJECTXY
-	.short \localId
-	.short \x
-	.short \y
+	.2byte \localId
+	.2byte \x
+	.2byte \y
 	.endm
 
 	/* Sets the specified object's invisibility to FALSE.*/
 	.macro showobjectat localId:req, map:req
 	.byte SCR_OP_SHOWOBJECTAT
-	.short \localId
+	.2byte \localId
 	map \map
 	.endm
 
 	@ Set the player object's invisibility to FALSE.
 	.macro showplayer
 	.byte SCR_OP_SHOWOBJECTAT
-	.short LOCALID_PLAYER
+	.2byte LOCALID_PLAYER
 	.byte 0 @ map group
 	.byte 0 @ map num
 	.endm
@@ -702,14 +702,14 @@
 	@ Sets the specified object's invisibility to TRUE.
 	.macro hideobjectat localId:req, map:req
 	.byte SCR_OP_HIDEOBJECTAT
-	.short \localId
+	.2byte \localId
 	map \map
 	.endm
 
 	@ Set the player object's invisibility to TRUE.
 	.macro hideplayer
 	.byte SCR_OP_HIDEOBJECTAT
-	.short LOCALID_PLAYER
+	.2byte LOCALID_PLAYER
 	.byte 0 @ map group
 	.byte 0 @ map num
 	.endm
@@ -722,7 +722,7 @@
 	/* Turns the specified object in the specified direction.*/
 	.macro turnobject localId:req, direction:req
 	.byte SCR_OP_TURNOBJECT
-	.short \localId
+	.2byte \localId
 	.byte \direction
 	.endm
 
@@ -730,8 +730,8 @@
 	.macro trainerbattle type:req, trainer:req, local_id:req, pointer1:req, pointer2, pointer3, pointer4
 	.byte SCR_OP_TRAINERBATTLE
 	.byte \type
-	.short \trainer
-	.short \local_id
+	.2byte \trainer
+	.2byte \local_id
 	.if \type == TRAINER_BATTLE_SINGLE
 		ptrvalue \pointer1 /* text*/
 		ptrvalue \pointer2 /* text*/
@@ -842,41 +842,41 @@
 	/* Checks if the trainer has been defeated by the player (by comparing the flag 'trainer + TRAINER_FLAGS_START' to TRUE).*/
 	.macro checktrainerflag trainer:req
 	.byte SCR_OP_CHECKTRAINERFLAG
-	.short \trainer
+	.2byte \trainer
 	.endm
 
 	/* Sets the trainer flag (trainer + TRAINER_FLAGS_START) to TRUE (defeated).*/
 	.macro settrainerflag trainer:req
 	.byte SCR_OP_SETTRAINERFLAG
-	.short \trainer
+	.2byte \trainer
 	.endm
 
 	/* Sets the trainer flag (trainer + TRAINER_FLAGS_START) to FALSE (not defeated).*/
 	.macro cleartrainerflag trainer:req
 	.byte SCR_OP_CLEARTRAINERFLAG
-	.short \trainer
+	.2byte \trainer
 	.endm
 
 	/* Sets the coordinates of an object's template, so that if the sprite goes off screen*/
 	/* it'll still be there when it comes back on screen.*/
 	.macro setobjectxyperm localId:req, x:req, y:req
 	.byte SCR_OP_SETOBJECTXYPERM
-	.short \localId
-	.short \x
-	.short \y
+	.2byte \localId
+	.2byte \x
+	.2byte \y
 	.endm
 
 	/* Copies a live object event's xy position to its template, so that if the sprite goes off screen*/
 	/* it'll still be there when it comes back on screen.*/
 	.macro copyobjectxytoperm localId:req
 	.byte SCR_OP_COPYOBJECTXYTOPERM
-	.short \localId
+	.2byte \localId
 	.endm
 
 	/* Sets the movement type (MOVEMENT_TYPE_*) for an object's template.*/
 	.macro setobjectmovementtype localId:req, movementType:req
 	.byte SCR_OP_SETOBJECTMOVEMENTTYPE
-	.short \localId
+	.2byte \localId
 	.byte \movementType
 	.endm
 
@@ -995,7 +995,7 @@
 	/* Displays a box containing the front sprite for the specified Pokemon species.*/
 	.macro showmonpic species:req, x:req, y:req
 	.byte SCR_OP_SHOWMONPIC
-	.short \species
+	.2byte \species
 	.byte \x
 	.byte \y
 	.endm
@@ -1034,11 +1034,11 @@
 	/* VAR_RESULT will be set to MON_GIVEN_TO_PARTY, MON_GIVEN_TO_PC, or MON_CANT_GIVE depending on the outcome.*/
 	.macro givemon species:req, level:req, item=ITEM_NONE
 	.byte SCR_OP_GIVEMON
-	.short \species
+	.2byte \species
 	.byte \level
-	.short \item
-	.int 0
-	.int 0
+	.2byte \item
+	.4byte 0
+	.4byte 0
 	.byte 0
 	.endm
 
@@ -1046,7 +1046,7 @@
 	/* VAR_RESULT will be set to MON_GIVEN_TO_PARTY, MON_GIVEN_TO_PC, or MON_CANT_GIVE depending on the outcome.*/
 	.macro giveegg species:req
 	.byte SCR_OP_GIVEEGG
-	.short \species
+	.2byte \species
 	.endm
 
 	/* Replaces the move at 'slot' of the Pokémon in the player's party at 'partyIndex' with the specified move.*/
@@ -1056,7 +1056,7 @@
 	.byte SCR_OP_SETMONMOVE
 	.byte \partyIndex
 	.byte \slot
-	.short \move
+	.2byte \move
 	.endm
 
 	/* Checks if at least one Pokemon in the player's party knows the specified move. If so, VAR_RESULT is set to the*/
@@ -1064,7 +1064,7 @@
 	/* VAR_0x8004 is also set to this Pokemon's species.*/
 	.macro checkpartymove move:req
 	.byte SCR_OP_CHECKPARTYMOVE
-	.short \move
+	.2byte \move
 	.endm
 
 	/* Converts STR_VAR_1, STR_VAR_2, or STR_VAR_3 to its corresponding index into sScriptStringVars (0, 1, or 2).*/
@@ -1087,7 +1087,7 @@
 	.macro bufferspeciesname stringVarId:req, species:req
 	.byte SCR_OP_BUFFERSPECIESNAME
 	stringvar \stringVarId
-	.short \species
+	.2byte \species
 	.endm
 
 	/* Writes the name of the species of the first Pokemon in the player's party to the specified buffer.*/
@@ -1101,7 +1101,7 @@
 	.macro bufferpartymonnick stringVarId:req, slot:req
 	.byte SCR_OP_BUFFERPARTYMONNICK
 	stringvar \stringVarId
-	.short \slot
+	.2byte \slot
 	.endm
 
 	/* Writes the name of the specified item to the specified buffer. If itemId is >= ITEMS_COUNT,*/
@@ -1109,35 +1109,35 @@
 	.macro bufferitemname stringVarId:req, item:req
 	.byte SCR_OP_BUFFERITEMNAME
 	stringvar \stringVarId
-	.short \item
+	.2byte \item
 	.endm
 
 	/* Writes the name of the specified decoration to the specified buffer.*/
 	.macro bufferdecorationname stringVarId:req, decoration:req
 	.byte SCR_OP_BUFFERDECORATIONNAME
 	stringvar \stringVarId
-	.short \decoration
+	.2byte \decoration
 	.endm
 
 	/* Writes the name of the specified move to the specified buffer.*/
 	.macro buffermovename stringVarId:req, move:req
 	.byte SCR_OP_BUFFERMOVENAME
 	stringvar \stringVarId
-	.short \move
+	.2byte \move
 	.endm
 
 	/* Converts the value of input to a decimal string, and writes that string to the specified buffer.*/
 	.macro buffernumberstring stringVarId:req, input:req
 	.byte SCR_OP_BUFFERNUMBERSTRING
 	stringvar \stringVarId
-	.short \input
+	.2byte \input
 	.endm
 
 	/* Writes the given standard string (STDSTRING_*) to the specified buffer. Invalid std string ids are not handled.*/
 	.macro bufferstdstring stringVarId:req, index:req
 	.byte SCR_OP_BUFFERSTDSTRING
 	stringvar \stringVarId
-	.short \index
+	.2byte \index
 	.endm
 
 	/* Copies the string at the given pointer to the specified buffer.*/
@@ -1156,7 +1156,7 @@
 
 	@ Used as the endpoint for a Pokemart item list
 	.macro pokemartlistend
-	.short ITEM_NONE
+	.2byte ITEM_NONE
 	release
 	end
 	.endm
@@ -1177,7 +1177,7 @@
 	/* Starts up the slot machine minigame. id is a SLOT_MACHINE_* value that influences probabilities of certain reel outcomes.*/
 	.macro playslotmachine id:req
 	.byte SCR_OP_PLAYSLOTMACHINE
-	.short \id
+	.2byte \id
 	.endm
 
 	/* Sets a berry tree's berry and growth stage. treeId is any BERRY_TREE_* constant (an index into berryTrees in SaveBlock1),*/
@@ -1212,14 +1212,14 @@
 	/* Stores a random integer between 0 and limit (exclusive of limit) in VAR_RESULT.*/
 	.macro random limit:req
 	.byte SCR_OP_RANDOM
-	.short \limit
+	.2byte \limit
 	.endm
 
 	/* Adds value to the player's money. If adding 'value' money would exceed MAX_MONEY, the player's money is set to MAX_MONEY.*/
 	/* If 'disable' is set to anything but 0 then this command does nothing.*/
 	.macro addmoney value:req, disable=0
 	.byte SCR_OP_ADDMONEY
-	.int \value
+	.4byte \value
 	.byte \disable
 	.endm
 
@@ -1227,7 +1227,7 @@
 	/* If 'disable' is set to anything but 0 then this command does nothing.*/
 	.macro removemoney value:req, disable=0
 	.byte SCR_OP_REMOVEMONEY
-	.int \value
+	.4byte \value
 	.byte \disable
 	.endm
 
@@ -1235,7 +1235,7 @@
 	/* If 'disable' is set to anything but 0 then this command does nothing.*/
 	.macro checkmoney value:req, disable=0
 	.byte SCR_OP_CHECKMONEY
-	.int \value
+	.4byte \value
 	.byte \disable
 	.endm
 
@@ -1267,7 +1267,7 @@
 	/* Gets whether the effects of the specified PokeNews program are active. newsKind is a POKENEWS_* constant.*/
 	.macro getpokenewsactive newsKind:req
 	.byte SCR_OP_GETPOKENEWSACTIVE
-	.short \newsKind
+	.2byte \newsKind
 	.endm
 
 	/* Fades the screen to and from black and white. Modes are FADE_(TO/FROM)_(WHITE/BLACK)*/
@@ -1287,7 +1287,7 @@
 	/* of 7 is the smallest flash radius, a level of 8 is fully black.*/
 	.macro setflashlevel level:req
 	.byte SCR_OP_SETFLASHLEVEL
-	.short \level
+	.2byte \level
 	.endm
 
 	/* Animates the flash radius from its current size to the size it would be at the specified level.*/
@@ -1306,26 +1306,26 @@
 	/* Executes the specified field effect animation (FLDEFF_*).*/
 	.macro dofieldeffect animation:req
 	.byte SCR_OP_DOFIELDEFFECT
-	.short \animation
+	.2byte \animation
 	.endm
 
 	/* Sets the field effect argument at index 'argNum' to 'value.'*/
 	.macro setfieldeffectargument argNum:req, value:req
 	.byte SCR_OP_SETFIELDEFFECTARGUMENT
 	.byte \argNum
-	.short \value
+	.2byte \value
 	.endm
 
 	/* Blocks script execution until all playing field effect animations complete.*/
 	.macro waitfieldeffect animation:req
 	.byte SCR_OP_WAITFIELDEFFECT
-	.short \animation
+	.2byte \animation
 	.endm
 
 	/* Sets which healing location (HEAL_LOCATION_*) the player will return to if all of the Pokemon in their party faint.*/
 	.macro setrespawn heallocation:req
 	.byte SCR_OP_SETRESPAWN
-	.short \heallocation
+	.2byte \heallocation
 	.endm
 
 	/* Checks the player's gender. Stores the result (MALE (0) or FEMALE (1)) in VAR_RESULT.*/
@@ -1337,17 +1337,17 @@
 	/* You can use waitmoncry to block script execution until the cry finishes.*/
 	.macro playmoncry species:req, mode:req
 	.byte SCR_OP_PLAYMONCRY
-	.short \species
-	.short \mode
+	.2byte \species
+	.2byte \mode
 	.endm
 
 	/* Set the metatile at (x, y) on the current map to the given metatile and impassability.*/
 	.macro setmetatile x:req, y:req, metatileId:req, impassable:req
 	.byte SCR_OP_SETMETATILE
-	.short \x
-	.short \y
-	.short \metatileId
-	.short \impassable
+	.2byte \x
+	.2byte \y
+	.2byte \metatileId
+	.2byte \impassable
 	.endm
 
 	/* Queues a weather change to the default weather for the map.*/
@@ -1358,7 +1358,7 @@
 	/* Queues a weather change to type weather.*/
 	.macro setweather type:req
 	.byte SCR_OP_SETWEATHER
-	.short \type
+	.2byte \type
 	.endm
 
 	/* Executes the weather change queued with resetweather or setweather. The current weather will smoothly fade into the queued weather.*/
@@ -1376,14 +1376,14 @@
 	/* This should be done before the layout is loaded, typically in the ON_TRANSITION map script.*/
 	.macro setmaplayoutindex index:req
 	.byte SCR_OP_SETMAPLAYOUTINDEX
-	.short \index
+	.2byte \index
 	.endm
 
 	/* Sets the specified object's sprite's subpriority, and sets fixedPriority to TRUE.*/
 	/* Only used to hide the player and Briney behind the boat.*/
 	.macro setobjectsubpriority localId:req, map:req, subpriority:req
 	.byte SCR_OP_SETOBJECTSUBPRIORITY
-	.short \localId
+	.2byte \localId
 	map \map
 	.byte \subpriority
 	.endm
@@ -1391,7 +1391,7 @@
 	/* Sets the specified object's fixedPriority to FALSE. Does not change the subpriority field.*/
 	.macro resetobjectsubpriority localId:req, map:req
 	.byte SCR_OP_RESETOBJECTSUBPRIORITY
-	.short \localId
+	.2byte \localId
 	map \map
 	.endm
 
@@ -1402,8 +1402,8 @@
 	.byte SCR_OP_CREATEVOBJECT
 	.byte \graphicsId
 	.byte \id
-	.short \x
-	.short \y
+	.2byte \x
+	.2byte \y
 	.byte \elevation
 	.byte \direction
 	.endm
@@ -1418,15 +1418,15 @@
 	/* Opens the door metatile at (x, y) with an animation.*/
 	.macro opendoor x:req, y:req
 	.byte SCR_OP_OPENDOOR
-	.short \x
-	.short \y
+	.2byte \x
+	.2byte \y
 	.endm
 
 	/* Closes the door metatile at (x, y) with an animation.*/
 	.macro closedoor x:req, y:req
 	.byte SCR_OP_CLOSEDOOR
-	.short \x
-	.short \y
+	.2byte \x
+	.2byte \y
 	.endm
 
 	/* Waits for the door animation started with opendoor or closedoor to finish.*/
@@ -1437,24 +1437,24 @@
 	/* Sets the door metatile at (x, y) to be open without an animation.*/
 	.macro setdooropen x:req, y:req
 	.byte SCR_OP_SETDOOROPEN
-	.short \x
-	.short \y
+	.2byte \x
+	.2byte \y
 	.endm
 
 	/* Sets the door metatile at (x, y) to be closed without an animation.*/
 	.macro setdoorclosed x:req, y:req
 	.byte SCR_OP_SETDOORCLOSED
-	.short \x
-	.short \y
+	.2byte \x
+	.2byte \y
 	.endm
 
 	/* Consumes its parameters and does nothing. It is implemented but unused in Ruby/Sapphire.*/
 	.macro addelevmenuitem a:req, b:req, c:req, d:req
 	.byte SCR_OP_ADDELEVMENUITEM
 	.byte \a
-	.short \b
-	.short \c
-	.short \d
+	.2byte \b
+	.2byte \c
+	.2byte \d
 	.endm
 
 	/* Does nothing. It is implemented but unused in Ruby/Sapphire.*/
@@ -1465,14 +1465,14 @@
 	/* Gets the number of coins the player has and stores it in the variable 'out'.*/
 	.macro checkcoins out:req
 	.byte SCR_OP_CHECKCOINS
-	.short \out
+	.2byte \out
 	.endm
 
 	/* Gives 'count' coins to the player, up to a total of MAX_COINS.*/
 	/* If the player already has MAX_COINS then VAR_RESULT is set to TRUE, otherwise it is set to FALSE.*/
 	.macro addcoins count:req
 	.byte SCR_OP_ADDCOINS
-	.short \count
+	.2byte \count
 	.endm
 
 	/* Takes 'count' coins from the player.*/
@@ -1480,16 +1480,16 @@
 	/* Otherwise VAR_RESULT is set to FALSE.*/
 	.macro removecoins count:req
 	.byte SCR_OP_REMOVECOINS
-	.short \count
+	.2byte \count
 	.endm
 
 	/* Prepares to start a wild battle against a 'species' at 'level' holding 'item'. Running this command will not affect*/
 	/* normal wild battles. You start the prepared battle with dowildbattle.*/
 	.macro setwildbattle species:req, level:req, item=ITEM_NONE
 	.byte SCR_OP_SETWILDBATTLE
-	.short \species
+	.2byte \species
 	.byte \level
-	.short \item
+	.2byte \item
 	.endm
 
 	/* Starts a wild battle against the Pokemon generated by setwildbattle. Blocks script execution until the battle finishes.*/
@@ -1592,7 +1592,7 @@
 	.macro bufferboxname stringVarId:req, box:req
 	.byte SCR_OP_BUFFERBOXNAME
 	stringvar \stringVarId
-	.short \box
+	.2byte \box
 	.endm
 
 	/* Used only in FireRed/LeafGreen, does nothing in Emerald.*/
@@ -1632,14 +1632,14 @@
 	/* Sets the modernFatefulEncounter bit for the Pokemon in the specified slot of the player's party.*/
 	.macro setmodernfatefulencounter slot:req
 	.byte SCR_OP_SETMODERNFATEFULENCOUNTER
-	.short \slot
+	.2byte \slot
 	.endm
 
 	/* Checks if the modernFatefulEncounter bit is set for the Pokemon in the specified slot of the player's party. If it isn't set,*/
 	/* VAR_RESULT is TRUE. If the bit is set (or if the specified slot is empty or invalid), VAR_RESULT is FALSE.*/
 	.macro checkmodernfatefulencounter slot:req
 	.byte SCR_OP_CHECKMODERNFATEFULENCOUNTER
-	.short \slot
+	.2byte \slot
 	.endm
 
 	/* Jumps to the ram script saved from a Wonder Card. If there is no valid saved Wonder Card or if the*/
@@ -1651,7 +1651,7 @@
 	/* Used only in FireRed/LeafGreen, does nothing in Emerald.*/
 	.macro setworldmapflag worldmapflag:req
 	.byte SCR_OP_SETWORLDMAPFLAG
-	.short \worldmapflag
+	.2byte \worldmapflag
 	.endm
 
 	/* Warps the player to the specified map using a teleport effect. Effect is similar to warpteleport, but*/
@@ -1666,7 +1666,7 @@
 	/* Changes the location where the player caught the Pokemon in the specified slot of their party.*/
 	.macro setmonmetlocation slot:req, location:req
 	.byte SCR_OP_SETMONMETLOCATION
-	.short \slot
+	.2byte \slot
 	.byte \location
 	.endm
 
@@ -1674,7 +1674,7 @@
 	/* on the colored puzzle specified by puzzleNumber.*/
 	.macro moverotatingtileobjects puzzleNumber:req
 	.byte SCR_OP_MOVEROTATINGTILEOBJECTS
-	.short \puzzleNumber
+	.2byte \puzzleNumber
 	.endm
 
 	/* For the rotating tile puzzles in Mossdeep Gym / Trick House Room 7. Updates the facing direction of all objects on the puzzle tiles*/
@@ -1687,7 +1687,7 @@
 	/* the puzzle tiles start (TRUE for Trick House Room, FALSE for Mossdeep Gym).*/
 	.macro initrotatingtilepuzzle isTrickHouse:req
 	.byte SCR_OP_INITROTATINGTILEPUZZLE
-	.short \isTrickHouse
+	.2byte \isTrickHouse
 	.endm
 
 	/* For the rotating tile puzzles in Mossdeep Gym / Trick House Room 7. Frees the memory allocated for the puzzle objects.*/
@@ -1739,7 +1739,7 @@
 	.macro buffertrainerclassname stringVarId:req, trainerId:req
 	.byte SCR_OP_BUFFERTRAINERCLASSNAME
 	stringvar \stringVarId
-	.short \trainerId
+	.2byte \trainerId
 	.endm
 
 	/* Buffers the specified trainer's name to the given string var.*/
@@ -1747,7 +1747,7 @@
 	.macro buffertrainername stringVarId:req, trainerId:req
 	.byte SCR_OP_BUFFERTRAINERNAME
 	stringvar \stringVarId
-	.short \trainerId
+	.2byte \trainerId
 	.endm
 
 	/* Starts a Pokenav call with the given text.*/
@@ -1769,7 +1769,7 @@
 	.macro buffercontestname stringVarId:req, category:req
 	.byte SCR_OP_BUFFERCONTESTNAME
 	stringvar \stringVarId
-	.short \category
+	.2byte \category
 	.endm
 
 	/* Writes the name of the specified item to the specified buffer. If 'item' is a Berry or ITEM_POKE_BALL*/
@@ -1778,8 +1778,8 @@
 	.macro bufferitemnameplural stringVarId:req, item:req, quantity:req
 	.byte SCR_OP_BUFFERITEMNAMEPLURAL
 	stringvar \stringVarId
-	.short \item
-	.short \quantity
+	.2byte \item
+	.2byte \quantity
 	.endm
 
 

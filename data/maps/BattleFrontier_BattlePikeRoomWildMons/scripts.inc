@@ -7,7 +7,7 @@ BattleFrontier_BattlePikeRoomWildMons_MapScripts::
 BattleFrontier_BattlePikeRoomWildMons_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, BattleFrontier_BattlePikeRoomWildMons_EventScript_SetInWildMonRoom
 	map_script_2 VAR_TEMP_1, 1, BattleFrontier_BattlePikeRoomWildMons_EventScript_WarpToLobbyLost
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattlePikeRoomWildMons_EventScript_SetInWildMonRoom::
 	setvar VAR_TEMP_0, 1
@@ -22,7 +22,7 @@ BattleFrontier_BattlePikeRoomWildMons_EventScript_WarpToLobbyLost::
 
 BattleFrontier_BattlePikeRoomWildMons_OnWarp:
 	map_script_2 VAR_TEMP_4, 0, BattleFrontier_BattlePikeRoomWildMons_EventScript_TurnPlayerNorth
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattlePikeRoomWildMons_EventScript_TurnPlayerNorth::
 	setvar VAR_TEMP_4, 1

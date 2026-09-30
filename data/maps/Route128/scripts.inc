@@ -9,7 +9,7 @@ Route128_OnTransition:
 
 Route128_OnFrame:
 	map_script_2 VAR_ROUTE128_STATE, 1, Route128_EventScript_KyogreAwakenedScene
-	.short 0
+	.2byte 0
 
 Route128_EventScript_KyogreAwakenedScene::
 	lockall

@@ -58,56 +58,56 @@
 	.macro if_status battler:req, status1:req, param2:req
 	.byte 0x9
 	.byte \battler
-	.int \status1
+	.4byte \status1
 	ptrvalue \param2
 	.endm
 
 	.macro if_not_status battler:req, status1:req, param2:req
 	.byte 0xa
 	.byte \battler
-	.int \status1
+	.4byte \status1
 	ptrvalue \param2
 	.endm
 
 	.macro if_status2 battler:req, status2:req, param2:req
 	.byte 0xb
 	.byte \battler
-	.int \status2
+	.4byte \status2
 	ptrvalue \param2
 	.endm
 
 	.macro if_not_status2 battler:req, status2:req, param2:req
 	.byte 0xc
 	.byte \battler
-	.int \status2
+	.4byte \status2
 	ptrvalue \param2
 	.endm
 
 	.macro if_status3 battler:req, status3:req, param2:req
 	.byte 0xd
 	.byte \battler
-	.int \status3
+	.4byte \status3
 	ptrvalue \param2
 	.endm
 
 	.macro if_not_status3 battler:req, status3:req, param2:req
 	.byte 0xe
 	.byte \battler
-	.int \status3
+	.4byte \status3
 	ptrvalue \param2
 	.endm
 
 	.macro if_side_affecting battler:req, sidestatus:req, param2:req
 	.byte 0xf
 	.byte \battler
-	.int \sidestatus
+	.4byte \sidestatus
 	ptrvalue \param2
 	.endm
 
 	.macro if_not_side_affecting battler:req, sidestatus:req, param2:req
 	.byte 0x10
 	.byte \battler
-	.int \sidestatus
+	.4byte \sidestatus
 	ptrvalue \param2
 	.endm
 
@@ -161,13 +161,13 @@
 
 	.macro if_move param0:req, param1:req
 	.byte 0x19
-	.short \param0
+	.2byte \param0
 	ptrvalue \param1
 	.endm
 
 	.macro if_not_move param0:req, param1:req
 	.byte 0x1a
-	.short \param0
+	.2byte \param0
 	ptrvalue \param1
 	.endm
 
@@ -298,14 +298,14 @@
 	.macro if_status_in_party battler:req, status1:req, param2:req
 	.byte 0x34
 	.byte \battler
-	.int \status1
+	.4byte \status1
 	ptrvalue \param2
 	.endm
 
 	.macro if_status_not_in_party battler:req, status1:req, param2:req
 	.byte 0x35
 	.byte \battler
-	.int \status1
+	.4byte \status1
 	ptrvalue \param2
 	.endm
 
@@ -370,14 +370,14 @@
 	.macro if_has_move battler:req, param1:req, param2:req
 	.byte 0x3f
 	.byte \battler
-	.short \param1
+	.2byte \param1
 	ptrvalue \param2
 	.endm
 
 	.macro if_doesnt_have_move battler:req, param1:req, param2:req
 	.byte 0x40
 	.byte \battler
-	.short \param1
+	.2byte \param1
 	ptrvalue \param2
 	.endm
 
@@ -547,7 +547,7 @@
 	.macro if_holds_item battler:req, param1:req, param2:req
 	.byte 0x62
 	.byte \battler
-	.short \param1
+	.2byte \param1
 	ptrvalue \param2
 	.endm
 

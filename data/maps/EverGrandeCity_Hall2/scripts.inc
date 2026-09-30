@@ -4,7 +4,7 @@ EverGrandeCity_Hall2_MapScripts::
 
 EverGrandeCity_Hall2_OnWarp:
 	map_script_2 VAR_TEMP_1, 0, EverGrandeCity_Hall2_EventScript_TurnPlayerNorth
-	.short 0
+	.2byte 0
 
 EverGrandeCity_Hall2_EventScript_TurnPlayerNorth::
 	turnobject LOCALID_PLAYER, DIR_NORTH

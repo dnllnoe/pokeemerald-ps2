@@ -142,7 +142,7 @@ SootopolisCity_EventScript_SetExpertBlockCaveEntrance::
 
 SootopolisCity_OnWarp:
 	map_script_2 VAR_SOOTOPOLIS_CITY_STATE, 5, SootopolisCity_EventScript_PlayerFaceLegendaries
-	.short 0
+	.2byte 0
 
 SootopolisCity_EventScript_PlayerFaceLegendaries::
 	call_if_eq VAR_SKY_PILLAR_STATE, 1, SootopolisCity_EventScript_PlayerFaceLegendaries1
@@ -165,7 +165,7 @@ SootopolisCity_OnResume:
 SootopolisCity_OnFrame:
 	map_script_2 VAR_SOOTOPOLIS_CITY_STATE, 1, SootopolisCity_EventScript_StartLegendariesScene
 	map_script_2 VAR_SKY_PILLAR_STATE, 1, SootopolisCity_EventScript_StartRayquazaScene
-	.short 0
+	.2byte 0
 
 /* If not at PokeCenter, assumed to have arrived via Dive*/
 SootopolisCity_EventScript_StartLegendariesScene::

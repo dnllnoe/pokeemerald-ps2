@@ -48,7 +48,7 @@ SlateportCity_EventScript_MoveScottLeft::
 
 SlateportCity_OnFrame:
 	map_script_2 VAR_SLATEPORT_OUTSIDE_MUSEUM_STATE, 1, SlateportCity_EventScript_ScottScene
-	.short 0
+	.2byte 0
 
 SlateportCity_EventScript_ScottScene::
 	lockall
@@ -125,12 +125,12 @@ SlateportCity_EventScript_EnergyGuru::
 
 	.align 2
 SlateportCity_Pokemart_EnergyGuru:
-	.short ITEM_PROTEIN
-	.short ITEM_IRON
-	.short ITEM_CARBOS
-	.short ITEM_ZINC
-	.short ITEM_CALCIUM
-	.short ITEM_HP_UP
+	.2byte ITEM_PROTEIN
+	.2byte ITEM_IRON
+	.2byte ITEM_CARBOS
+	.2byte ITEM_ZINC
+	.2byte ITEM_CALCIUM
+	.2byte ITEM_HP_UP
 	pokemartlistend
 
 SlateportCity_EventScript_EffortRibbonWoman::
@@ -486,9 +486,9 @@ SlateportCity_EventScript_DollClerk::
 
 	.align 2
 SlateportCity_PokemartDecor_Dolls:
-	.short DECOR_AZURILL_DOLL
-	.short DECOR_MARILL_DOLL
-	.short DECOR_SKITTY_DOLL
+	.2byte DECOR_AZURILL_DOLL
+	.2byte DECOR_MARILL_DOLL
+	.2byte DECOR_SKITTY_DOLL
 	pokemartlistend
 
 SlateportCity_EventScript_ComeBackWithSecretPower::
@@ -509,20 +509,20 @@ SlateportCity_EventScript_DecorClerk::
 
 	.align 2
 SlateportCity_PokemartDecor:
-	.short DECOR_RED_BRICK
-	.short DECOR_BLUE_BRICK
-	.short DECOR_YELLOW_BRICK
-	.short DECOR_RED_BALLOON
-	.short DECOR_BLUE_BALLOON
-	.short DECOR_YELLOW_BALLOON
-	.short DECOR_C_LOW_NOTE_MAT
-	.short DECOR_D_NOTE_MAT
-	.short DECOR_E_NOTE_MAT
-	.short DECOR_F_NOTE_MAT
-	.short DECOR_G_NOTE_MAT
-	.short DECOR_A_NOTE_MAT
-	.short DECOR_B_NOTE_MAT
-	.short DECOR_C_HIGH_NOTE_MAT
+	.2byte DECOR_RED_BRICK
+	.2byte DECOR_BLUE_BRICK
+	.2byte DECOR_YELLOW_BRICK
+	.2byte DECOR_RED_BALLOON
+	.2byte DECOR_BLUE_BALLOON
+	.2byte DECOR_YELLOW_BALLOON
+	.2byte DECOR_C_LOW_NOTE_MAT
+	.2byte DECOR_D_NOTE_MAT
+	.2byte DECOR_E_NOTE_MAT
+	.2byte DECOR_F_NOTE_MAT
+	.2byte DECOR_G_NOTE_MAT
+	.2byte DECOR_A_NOTE_MAT
+	.2byte DECOR_B_NOTE_MAT
+	.2byte DECOR_C_HIGH_NOTE_MAT
 	pokemartlistend
 
 SlateportCity_EventScript_PowerTMClerk::
@@ -537,8 +537,8 @@ SlateportCity_EventScript_PowerTMClerk::
 
 	.align 2
 SlateportCity_Pokemart_PowerTMs:
-	.short ITEM_TM_HIDDEN_POWER
-	.short ITEM_TM_SECRET_POWER
+	.2byte ITEM_TM_HIDDEN_POWER
+	.2byte ITEM_TM_SECRET_POWER
 	pokemartlistend
 
 /* Scene with Capt Sterns interview and Team Aqua announcing plans to steal Submarine*/

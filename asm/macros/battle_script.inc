@@ -6,7 +6,7 @@
 	.macro accuracycheck failPtr:req, move:req
 	.byte B_SCR_OP_ACCURACYCHECK
 	ptrvalue \failPtr
-	.short \move
+	.2byte \move
 	.endm
 
 	.macro attackstring
@@ -69,17 +69,17 @@
 
 	.macro printstring id:req
 	.byte B_SCR_OP_PRINTSTRING
-	.short \id
+	.2byte \id
 	.endm
 
 	.macro printselectionstring id:req
 	.byte B_SCR_OP_PRINTSELECTIONSTRING
-	.short \id
+	.2byte \id
 	.endm
 
 	.macro waitmessage time:req
 	.byte B_SCR_OP_WAITMESSAGE
-	.short \time
+	.2byte \time
 	.endm
 
 	.macro printfromtable ptr:req
@@ -136,14 +136,14 @@
 	.macro jumpifstatus battler:req, status1:req, ptr:req
 	.byte B_SCR_OP_JUMPIFSTATUS
 	.byte \battler
-	.int \status1
+	.4byte \status1
 	ptrvalue \ptr
 	.endm
 
 	.macro jumpifstatus2 battler:req, status2:req, ptr:req
 	.byte B_SCR_OP_JUMPIFSTATUS2
 	.byte \battler
-	.int \status2
+	.4byte \status2
 	ptrvalue \ptr
 	.endm
 
@@ -157,7 +157,7 @@
 	.macro jumpifsideaffecting battler:req, sidestatus:req, ptr:req
 	.byte B_SCR_OP_JUMPIFSIDEAFFECTING
 	.byte \battler
-	.short \sidestatus
+	.2byte \sidestatus
 	ptrvalue \ptr
 	.endm
 
@@ -173,7 +173,7 @@
 	.macro jumpifstatus3condition battler:req, status3:req, condition:req, ptr:req
 	.byte B_SCR_OP_JUMPIFSTATUS3CONDITION
 	.byte \battler
-	.int \status3
+	.4byte \status3
 	.byte \condition
 	ptrvalue \ptr
 	.endm
@@ -226,7 +226,7 @@
 	.byte B_SCR_OP_JUMPIFHALFWORD
 	.byte \ifflag
 	ptrvalue \val
-	.short \hword
+	.2byte \hword
 	ptrvalue \ptr
 	.endm
 
@@ -234,7 +234,7 @@
 	.byte B_SCR_OP_JUMPIFWORD
 	.byte \ifflag
 	ptrvalue \val
-	.int \word
+	.4byte \word
 	ptrvalue \ptr
 	.endm
 
@@ -296,13 +296,13 @@
 	.macro orhalfword ptr:req, hword:req
 	.byte B_SCR_OP_ORHALFWORD
 	ptrvalue \ptr
-	.short \hword
+	.2byte \hword
 	.endm
 
 	.macro orword ptr:req, word:req
 	.byte B_SCR_OP_ORWORD
 	ptrvalue \ptr
-	.int \word
+	.4byte \word
 	.endm
 
 	.macro bicbyte ptr:req, byte:req
@@ -314,18 +314,18 @@
 	.macro bichalfword ptr:req, hword:req
 	.byte B_SCR_OP_BICHALFWORD
 	ptrvalue \ptr
-	.short \hword
+	.2byte \hword
 	.endm
 
 	.macro bicword ptr:req, word:req
 	.byte B_SCR_OP_BICWORD
 	ptrvalue \ptr
-	.int \word
+	.4byte \word
 	.endm
 
 	.macro pause time:req
 	.byte B_SCR_OP_PAUSE
-	.short \time
+	.2byte \time
 	.endm
 
 	.macro waitstate
@@ -497,12 +497,12 @@
 
 	.macro playse song:req
 	.byte B_SCR_OP_PLAYSE
-	.short \song
+	.2byte \song
 	.endm
 
 	.macro fanfare song:req
 	.byte B_SCR_OP_FANFARE
-	.short \song
+	.2byte \song
 	.endm
 
 	.macro playfaintcry battler:req
@@ -582,14 +582,14 @@
 	.macro status2animation battler:req, status2:req
 	.byte B_SCR_OP_STATUS2ANIMATION
 	.byte \battler
-	.int \status2
+	.4byte \status2
 	.endm
 
 	.macro chosenstatusanimation battler:req, isStatus2:req, status:req
 	.byte B_SCR_OP_CHOSENSTATUSANIMATION
 	.byte \battler
 	.byte \isStatus2
-	.int \status
+	.4byte \status
 	.endm
 
 	.macro yesnobox

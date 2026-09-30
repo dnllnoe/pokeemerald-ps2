@@ -4,7 +4,7 @@ BattleFrontier_BattleArenaCorridor_MapScripts::
 
 BattleFrontier_BattleArenaCorridor_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, BattleFrontier_BattleArenaCorridor_EventScript_WalkToBattleRoom
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleArenaCorridor_EventScript_WalkToBattleRoom::
 	delay 16

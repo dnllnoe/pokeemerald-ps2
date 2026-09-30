@@ -4,7 +4,7 @@ VerdanturfTown_BattleTentCorridor_MapScripts::
 
 VerdanturfTown_BattleTentCorridor_OnFrame:
 	map_script_2 VAR_TEMP_0, 0, VerdanturfTown_BattleTentCorridor_EventScript_EnterCorridor
-	.short 0
+	.2byte 0
 
 VerdanturfTown_BattleTentCorridor_EventScript_EnterCorridor::
 	lockall

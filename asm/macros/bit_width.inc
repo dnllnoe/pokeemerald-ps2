@@ -18,6 +18,6 @@
 		.if VER_64BIT == 1
 			.quad \x
 		.else
-			.int \x
+			.4byte \x
 		.endif
 	.endm

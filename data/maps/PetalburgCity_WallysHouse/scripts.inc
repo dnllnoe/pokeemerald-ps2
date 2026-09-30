@@ -5,7 +5,7 @@ PetalburgCity_WallysHouse_MapScripts::
 
 PetalburgCity_WallysHouse_OnWarp:
 	map_script_2 VAR_PETALBURG_CITY_STATE, 4, PetalburgCity_WallysHouse_EventScript_PlayerWallysDadFaceEachOther
-	.short 0
+	.2byte 0
 
 PetalburgCity_WallysHouse_EventScript_PlayerWallysDadFaceEachOther::
 	turnobject LOCALID_PLAYER, DIR_EAST
@@ -14,7 +14,7 @@ PetalburgCity_WallysHouse_EventScript_PlayerWallysDadFaceEachOther::
 
 PetalburgCity_WallysHouse_OnFrame:
 	map_script_2 VAR_PETALBURG_CITY_STATE, 4, PetalburgCity_WallysHouse_EventScript_GiveHMSurf
-	.short 0
+	.2byte 0
 
 PetalburgCity_WallysHouse_EventScript_GiveHMSurf::
 	lockall

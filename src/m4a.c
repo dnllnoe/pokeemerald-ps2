@@ -3,6 +3,7 @@
 
 #ifdef PORTABLE
 #include "cgb_audio.h"
+#include "platform/system.h"
 void RunMixerFrame(void);
 #endif
 
@@ -479,9 +480,15 @@ void SampleFreqSet(u32 freq)
 #ifndef PORTABLE
     soundInfo->pcmSamplesPerVBlank = gPcmSamplesPerVBlankTable[freq - 1];
 #else
-    soundInfo->pcmSamplesPerVBlank = 701;
+    soundInfo->pcmSamplesPerVBlank = AUDIO_SAMPLES_PER_FRAME;
 #endif
+#ifndef PORTABLE
     soundInfo->pcmDmaPeriod = PCM_DMA_BUF_SIZE / soundInfo->pcmSamplesPerVBlank;
+#else
+    // 7 frames, like the GBA's at 13379 Hz, which sets how far back the reverb
+    // reaches, whatever the rate
+    soundInfo->pcmDmaPeriod = 7;
+#endif
 
 #ifndef PORTABLE
     // LCD refresh rate 59.7275Hz

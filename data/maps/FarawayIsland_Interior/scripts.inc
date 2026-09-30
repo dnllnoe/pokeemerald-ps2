@@ -46,7 +46,7 @@ FarawayIsland_Interior_EventScript_TryShowMew::
 
 FarawayIsland_Interior_OnFrame:
 	map_script_2 VAR_TEMP_1, 0, FarawayIsland_Interior_EventScript_FindMew
-	.short 0
+	.2byte 0
 
 FarawayIsland_Interior_EventScript_FindMew::
 	lockall

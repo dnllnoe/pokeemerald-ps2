@@ -9,7 +9,7 @@ SootopolisCity_MysteryEventsHouse_B1F_OnTransition:
 
 SootopolisCity_MysteryEventsHouse_B1F_OnFrame:
 	map_script_2 VAR_TEMP_1, 0, SootopolisCity_MysteryEventsHouse_B1F_EventScript_BattleVisitingTrainer
-	.short 0
+	.2byte 0
 
 SootopolisCity_MysteryEventsHouse_B1F_EventScript_BattleVisitingTrainer::
 	lockall

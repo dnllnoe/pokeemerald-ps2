@@ -20,7 +20,7 @@ Route110_EventScript_SaveCyclingMusic::
 
 Route110_OnFrame:
 	map_script_2 VAR_CYCLING_CHALLENGE_STATE, 1, Route110_EventScript_BeginCylcingRoadChallenge
-	.short 0
+	.2byte 0
 
 Route110_EventScript_BeginCylcingRoadChallenge::
 	special Special_BeginCyclingRoadChallenge

@@ -38,7 +38,7 @@ BattleFrontier_BattleTowerMultiPartnerRoom_EventScript_ChosePartner::
 
 BattleFrontier_BattleTowerMultiPartnerRoom_OnWarp:
 	map_script_2 VAR_TEMP_3, 1, BattleFrontier_BattleTowerMultiPartnerRoom_EventScript_TurnPlayerNorth
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleTowerMultiPartnerRoom_EventScript_TurnPlayerNorth::
 	turnobject LOCALID_PLAYER, DIR_NORTH
@@ -47,7 +47,7 @@ BattleFrontier_BattleTowerMultiPartnerRoom_EventScript_TurnPlayerNorth::
 BattleFrontier_BattleTowerMultiPartnerRoom_OnFrame:
 	map_script_2 VAR_TEMP_1, 0, BattleFrontier_BattleTowerMultiPartnerRoom_EventScript_EnterRoom
 	map_script_2 VAR_TEMP_3, 1, BattleFrontier_BattleTowerMultiPartnerRoom_EventScript_ExitRoom
-	.short 0
+	.2byte 0
 
 BattleFrontier_BattleTowerMultiPartnerRoom_EventScript_ExitRoom::
 	lockall

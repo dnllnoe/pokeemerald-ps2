@@ -2,12 +2,12 @@
 
 	.macro loadspritegfx tag:req
 	.byte 0x0
-	.short \tag
+	.2byte \tag
 	.endm
 
 	.macro unloadspritegfx tag:req
 	.byte 0x1
-	.short \tag
+	.2byte \tag
 	.endm
 
 	.macro createsprite template:req, anim_battler:req, subpriority_offset:req, argv:vararg
@@ -20,7 +20,7 @@
 	.endif
 	.byte (.Lsprite_\@_2 - .Lsprite_\@_1) / 2
 .Lsprite_\@_1:
-	.short \argv
+	.2byte \argv
 .Lsprite_\@_2:
 	.endm
 
@@ -30,7 +30,7 @@
 	.byte \priority
 	.byte (.Lcreatetask_\@_2 - .Lcreatetask_\@_1) / 2
 .Lcreatetask_\@_1:
-	.short \argv
+	.2byte \argv
 .Lcreatetask_\@_2:
 	.endm
 
@@ -57,7 +57,7 @@
 
 	.macro playse se:req
 	.byte 0x9
-	.short \se
+	.2byte \se
 	.endm
 
 	.macro monbg battler:req
@@ -72,7 +72,7 @@
 
 	.macro setalpha eva:req, evb:req
 	.byte 0x0C
-	.short ((\evb) << 8) | (\eva)
+	.2byte ((\evb) << 8) | (\eva)
 	.endm
 
 	.macro blendoff
@@ -91,7 +91,7 @@
 	.macro setarg argId:req, value:req
 	.byte 0x10
 	.byte \argId
-	.short \value
+	.2byte \value
 	.endm
 
 	.macro choosetwoturnanim ptr1:req, ptr2:req
@@ -135,7 +135,7 @@
 
 	.macro playsewithpan se:req, pan:req
 	.byte 0x19
-	.short \se
+	.2byte \se
 	.byte \pan
 	.endm
 
@@ -146,7 +146,7 @@
 
 	.macro panse se:req, currentPan:req, targetPan:req, incrementPan:req, delay:req
 	.byte 0x1b
-	.short \se
+	.2byte \se
 	.byte \currentPan
 	.byte \targetPan
 	.byte \incrementPan
@@ -155,7 +155,7 @@
 
 	.macro loopsewithpan se:req, pan:req, wait:req, times:req
 	.byte 0x1c
-	.short \se
+	.2byte \se
 	.byte \pan
 	.byte \wait
 	.byte \times
@@ -163,14 +163,14 @@
 
 	.macro waitplaysewithpan se:req, pan:req, wait:req
 	.byte 0x1d
-	.short \se
+	.2byte \se
 	.byte \pan
 	.byte \wait
 	.endm
 
 	.macro setbldcnt bldcnt:req
 	.byte 0x1e
-	.short \bldcnt
+	.2byte \bldcnt
 	.endm
 
 	.macro createsoundtask addr:req, argv:vararg
@@ -178,7 +178,7 @@
 	ptrvalue \addr
 	.byte (.Lcreatetask_1F_\@_2 - .Lcreatetask_1F_\@_1) / 2
 .Lcreatetask_1F_\@_1:
-	.short \argv
+	.2byte \argv
 .Lcreatetask_1F_\@_2:
 	.endm
 
@@ -189,7 +189,7 @@
 	.macro jumpargeq argId:req, value:req, ptr:req
 	.byte 0x21
 	.byte \argId
-	.short \value
+	.2byte \value
 	ptrvalue \ptr
 	.endm
 
@@ -217,7 +217,7 @@
 
 	.macro panse_adjustnone se:req, currentPan:req, targetPan:req, incrementPan:req, delay:req
 	.byte 0x26
-	.short \se
+	.2byte \se
 	.byte \currentPan
 	.byte \targetPan
 	.byte \incrementPan
@@ -226,7 +226,7 @@
 
 	.macro panse_adjustall se:req, currentPan:req, targetPan:req, incrementPan:req, delay:req
 	.byte 0x27
-	.short \se
+	.2byte \se
 	.byte \currentPan
 	.byte \targetPan
 	.byte \incrementPan
