@@ -1026,6 +1026,7 @@ static void SaveLineRegs(struct GsLineState *s)
     s->win1h = REG_WIN1H;
     s->win1v = REG_WIN1V;
     s->mosaic = REG_MOSAIC;
+    memcpy(s->bg2Affine, (const void *)REG_ADDR_BG2PA, sizeof(s->bg2Affine));
 }
 
 static void LoadLineRegs(const struct GsLineState *s)
@@ -1047,6 +1048,7 @@ static void LoadLineRegs(const struct GsLineState *s)
     REG_WIN1H = s->win1h;
     REG_WIN1V = s->win1v;
     REG_MOSAIC = s->mosaic;
+    memcpy((void *)REG_ADDR_BG2PA, s->bg2Affine, sizeof(s->bg2Affine));
 }
 
 // Runs the lines like DrawFrame, keeping each one's video registers, and then

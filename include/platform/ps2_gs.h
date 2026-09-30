@@ -22,6 +22,8 @@ struct GsLineState
     uint16_t win0h, win0v;
     uint16_t win1h, win1v;
     uint16_t mosaic;
+    // BG2's affine registers: PA, PB, PC, PD, then X and Y in halves
+    uint16_t bg2Affine[8];
 };
 
 void PS2GS_Init(void);

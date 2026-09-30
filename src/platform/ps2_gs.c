@@ -57,6 +57,23 @@ static struct Texture sTex[TEX_COUNT] = {
 };
 static uint32_t sClutVram[CLUT_COUNT];
 
+// Affine sprites are put together whole, as 8-bit colors, with a clear texel
+// all around so the GS finds that outside them, like the GBA does
+#define AFFINE_SLOTS 32
+#define AFFINE_TEX_SIZE 128
+#define AFFINE_STRIDE 72 // the widest sprite, 64, and its clear edges, in 8s
+static uint8_t sAffineData[AFFINE_SLOTS][AFFINE_STRIDE * (64 + 2)] __attribute__((aligned(64)));
+static uint32_t sAffineVram[AFFINE_SLOTS];
+// Each OAM entry's slot this frame, -1 for none
+static int sAffineSlot[128];
+
+// An affine background put together whole, as 8-bit colors: as it is when it
+// repeats, and otherwise with a clear texel all around, for outside it
+#define AFFINE_BG_MAX 512
+static uint8_t sAffineBg[AFFINE_BG_MAX * AFFINE_BG_MAX] __attribute__((aligned(64)));
+static uint32_t sAffineBgVram;
+static int sAffineBgSize, sAffineBgWraps;
+
 static GSGLOBAL *sGs;
 // Where the GBA's screen goes in the frame buffer
 static int sOriginX, sOriginY;
@@ -154,6 +171,9 @@ void PS2GS_Init(void)
     }
     for (int i = 0; i < CLUT_COUNT; i++)
         sClutVram[i] = gsKit_vram_alloc(sGs, gsKit_texture_size(16, 16, GS_PSM_CT16), GSKIT_ALLOC_USERBUFFER);
+    for (int i = 0; i < AFFINE_SLOTS; i++)
+        sAffineVram[i] = gsKit_vram_alloc(sGs, gsKit_texture_size(AFFINE_TEX_SIZE, AFFINE_TEX_SIZE, GS_PSM_T8), GSKIT_ALLOC_USERBUFFER);
+    sAffineBgVram = gsKit_vram_alloc(sGs, gsKit_texture_size(AFFINE_BG_MAX, AFFINE_BG_MAX, GS_PSM_T8), GSKIT_ALLOC_USERBUFFER);
 }
 
 // Tile t's top left in a layout
@@ -267,6 +287,8 @@ static void SetMarkTest(int mark)
     Ad(GS_TEST_1, GS_SETREG_TEST(1, 7, 0, 0, mark >= 0, mark > 0, 1, 1));
 }
 
+// The frame buffer being drawn, with bits of its pixels masked from writes,
+// as in 32-bit colors: 0xFF000000 for alpha
 static inline uint64_t Frame(uint32_t mask)
 {
     return GS_SETREG_FRAME_1(sGs->ScreenBuffer[sGs->ActiveBuffer & 1] / 8192, sGs->Width / 64, sGs->PSM, mask);
@@ -393,6 +415,9 @@ static int SpriteShows(const uint16_t *attr, int first, int last, int x0, int x1
 int PS2GS_CanDraw(const struct GsLineState *lines, const uint16_t *oam)
 {
     int brightMode = 0, brightEvy = 0;
+    uint8_t affineSeen[128] = {0};
+    int affineCount = 0;
+    int affineBgControl = -1; // one affine background for the frame
 
     for (int first = 0; first < GBA_HEIGHT;)
     {
@@ -412,8 +437,20 @@ int PS2GS_CanDraw(const struct GsLineState *lines, const uint16_t *oam)
             int bgs = (s->dispcnt >> 8) & 0xF & mask;
             int shown = bgs | (objOn && (mask & 0x10) ? 0x10 : 0) | 0x20;
 
+            // BG2 in mode 1 is affine: without mosaic, and one that doesn't
+            // repeat needs its clear edge to fit
             if (mode == 1 && (bgs & 4))
-                return 0;
+            {
+                int size = 128 << ((s->bgcnt[2] >> 14) & 3);
+
+                if ((s->bgcnt[2] & 0x40) && (s->mosaic & 0xFF))
+                    return 0;
+                if ((s->bgcnt[2] & (1 << 13)) ? size > AFFINE_BG_MAX : size + 2 > AFFINE_BG_MAX)
+                    return 0;
+                if (affineBgControl >= 0 && affineBgControl != (s->bgcnt[2] & 0xFFBF))
+                    return 0;
+                affineBgControl = s->bgcnt[2] & 0xFFBF;
+            }
             for (int bg = 0; bg < 4; bg++)
             {
                 if ((bgs & (1 << bg)) && (s->bgcnt[bg] & 0x40) && (s->mosaic & 0xFF))
@@ -445,10 +482,16 @@ int PS2GS_CanDraw(const struct GsLineState *lines, const uint16_t *oam)
                 // The sprite window only matters where it's on
                 if (OAM_MODE(attr[0]) == 2 && !(s->dispcnt & 0x8000))
                     continue;
-                if (OAM_AFFINE(attr[0]) || OAM_MODE(attr[0]) >= 2
+                if (OAM_MODE(attr[0]) >= 2
                  || (OAM_MOSAIC(attr[0]) && (s->mosaic & 0xFF00))
                  || (OAM_8BPP(attr[0]) && (OAM_TILE(attr[2]) & 1)))
                     return 0;
+                if (OAM_AFFINE(attr[0]) && !affineSeen[i])
+                {
+                    affineSeen[i] = 1;
+                    if (++affineCount > AFFINE_SLOTS)
+                        return 0;
+                }
             }
         }
         first = last + 1;
@@ -563,6 +606,200 @@ static void DrawSprite(const void *arg)
     }
 }
 
+// Puts an affine sprite together for the GS: its 4-bit colors with the
+// palette's number added, which is where they are in CLUT_OBJ4, or 8-bit ones
+static void BuildAffineSprite(int slot, const uint16_t *attr, const uint8_t *vram)
+{
+    int w = sObjSizes[OAM_SHAPE(attr[0])][OAM_SIZE(attr[1])][0];
+    int h = sObjSizes[OAM_SHAPE(attr[0])][OAM_SIZE(attr[1])][1];
+    int stride = (w + 2 + 7) & ~7;
+    int is8bpp = OAM_8BPP(attr[0]);
+    int tileNum = OAM_TILE(attr[2]);
+    int palette = OAM_PALETTE(attr[2]) * 16;
+    const uint8_t *objTiles = vram + 0x10000;
+    uint8_t *data = sAffineData[slot];
+
+    memset(data, 0, stride * (h + 2));
+    for (int ty = 0; ty < h / 8; ty++)
+    {
+        for (int tx = 0; tx < w / 8; tx++)
+        {
+            int block = ty * (w / 8) + tx;
+            uint8_t *dst = data + (1 + ty * 8) * stride + 1 + tx * 8;
+
+            if (is8bpp)
+            {
+                const uint8_t *src = objTiles + (((block * 2 + tileNum) * 32) & 0x7FFF);
+
+                for (int r = 0; r < 8; r++, dst += stride)
+                    memcpy(dst, src + r * 8, 8);
+            }
+            else
+            {
+                const uint8_t *src = objTiles + (((block + tileNum) * 32) & 0x7FFF);
+
+                for (int r = 0; r < 8; r++, dst += stride)
+                {
+                    for (int c = 0; c < 8; c++)
+                    {
+                        int color = (src[r * 4 + c / 2] >> ((c & 1) * 4)) & 0xF;
+
+                        dst[c] = color ? palette + color : 0;
+                    }
+                }
+            }
+        }
+    }
+    gsKit_texture_send_inline(sGs, (u32 *)data, stride, h + 2, sAffineVram[slot], GS_PSM_T8,
+                              AFFINE_TEX_SIZE / 64, GS_CLUT_TEXTURE);
+}
+
+static inline uint32_t FloatBits(float f)
+{
+    union { float f; uint32_t u; } bits = {f};
+
+    return bits.u;
+}
+
+struct AffineDraw
+{
+    const uint16_t *attr;
+    const uint16_t *oam;
+    int x, y, boxWidth, boxHeight;
+    int slot;
+    int bright;
+};
+
+// A sprite turned, scaled or sheared by its matrix, which maps a pixel's
+// offset from the sprite's center on the screen to one in the sprite. The
+// GS works the texels out from the corners' across the triangles, which is
+// the same, but at every pixel of the PS2's screen, so it's finer.
+static void DrawAffineSprite(const void *arg)
+{
+    const struct AffineDraw *d = arg;
+    const uint16_t *attr = d->attr;
+    int w = sObjSizes[OAM_SHAPE(attr[0])][OAM_SIZE(attr[1])][0];
+    int h = sObjSizes[OAM_SHAPE(attr[0])][OAM_SIZE(attr[1])][1];
+    int matrix = (attr[1] >> 9) & 0x1F;
+    float pa = (int16_t)d->oam[(matrix * 4 + 0) * 4 + 3] / 256.0f;
+    float pb = (int16_t)d->oam[(matrix * 4 + 1) * 4 + 3] / 256.0f;
+    float pc = (int16_t)d->oam[(matrix * 4 + 2) * 4 + 3] / 256.0f;
+    float pd = (int16_t)d->oam[(matrix * 4 + 3) * 4 + 3] / 256.0f;
+    int is8bpp = OAM_8BPP(attr[0]);
+    int clut = (is8bpp ? CLUT_OBJ8 : CLUT_OBJ4) + (d->bright ? CLUT_BRIGHT : 0);
+    struct Texture tex = {NULL, 0, 0, GS_PSM_T8, AFFINE_TEX_SIZE / 64, 7, 7, sAffineVram[d->slot]};
+    float centerX = d->x + d->boxWidth / 2.0f;
+    float centerY = d->y + d->boxHeight / 2.0f;
+    static const int sCorners[4][2] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
+
+    UseClut(clut);
+    AdBegin(4);
+    Ad(GS_TEX0_1, Tex0(&tex, clut, 16, 0));
+    Ad(GS_CLAMP_1, GS_SETREG_CLAMP(GS_CMODE_REGION_CLAMP, GS_CMODE_REGION_CLAMP, 0, w + 1, 0, h + 1));
+    Ad(GS_RGBAQ, GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0) | ((uint64_t)FloatBits(1.0f) << 32));
+    Ad(GS_PRIM, GS_PRIM_PRIM_TRISTRIP | (1 << 4) | sPrimBlend); // textured, STQ
+    for (int i = 0; i < 4; i++)
+    {
+        float gx = sCorners[i][0] * d->boxWidth / 2.0f;
+        float gy = sCorners[i][1] * d->boxHeight / 2.0f;
+        // Texels, with the clear edge, and sampled a quarter in like tiles are
+        float u = pa * gx + pb * gy + w / 2 + 1 + 0.25f;
+        float v = pc * gx + pd * gy + h / 2 + 1 + 0.25f;
+
+        AdBegin(2);
+        Ad(GS_ST, (uint64_t)FloatBits(u / AFFINE_TEX_SIZE) | ((uint64_t)FloatBits(v / AFFINE_TEX_SIZE) << 32));
+        Ad(GS_XYZ2, Xyz(sOriginX + (int)((centerX + gx) * SCALE), sOriginY + (int)((centerY + gy) * SCALE)));
+    }
+    AdBegin(2);
+    Ad(GS_CLAMP_1, 0);
+    Ad(GS_RGBAQ, GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0));
+}
+
+// Puts BG2 together for the GS, from its 8-bit tiles and byte map
+static void BuildAffineBackground(uint16_t control, const uint8_t *vram)
+{
+    int size = 128 << ((control >> 14) & 3);
+    int wraps = (control >> 13) & 1;
+    int edge = wraps ? 0 : 1;
+    int stride = wraps ? size : (size + 2 + 7) & ~7;
+    const uint8_t *tiles = vram + ((control >> 2) & 3) * 0x4000;
+    const uint8_t *map = vram + ((control >> 8) & 0x1F) * 0x800;
+
+    if (!wraps)
+        memset(sAffineBg, 0, stride * (size + 2));
+    for (int ty = 0; ty < size / 8; ty++)
+    {
+        for (int tx = 0; tx < size / 8; tx++)
+        {
+            const uint8_t *tile = tiles + ((map[ty * (size / 8) + tx] * 64) & 0xFFFF);
+            uint8_t *dst = sAffineBg + (edge + ty * 8) * stride + edge + tx * 8;
+
+            for (int r = 0; r < 8; r++, dst += stride)
+                memcpy(dst, tile + r * 8, 8);
+        }
+    }
+    sAffineBgSize = size;
+    sAffineBgWraps = wraps;
+    gsKit_texture_send_inline(sGs, (u32 *)sAffineBg, stride, wraps ? size : size + 2, sAffineBgVram, GS_PSM_T8,
+                              AFFINE_BG_MAX / 64, GS_CLUT_TEXTURE);
+}
+
+// BG2's texels at a pixel of the GBA's screen, like the software renderer:
+// the reference point plus the line times PB and PD, and x times PA and PC
+static void AffineBgTexel(const struct GsLineState *s, float x, float y, float *u, float *v)
+{
+    const uint16_t *a = s->bg2Affine;
+    int32_t refX = (int32_t)((a[4] | ((uint32_t)a[5] << 16)) << 4) >> 4; // 28 bits
+    int32_t refY = (int32_t)((a[6] | ((uint32_t)a[7] << 16)) << 4) >> 4;
+
+    *u = (refX + y * (int16_t)a[1] + x * (int16_t)a[0]) / 256.0f;
+    *v = (refY + y * (int16_t)a[3] + x * (int16_t)a[2]) / 256.0f;
+}
+
+static void DrawAffineBackground(const void *arg)
+{
+    const struct BgDraw *d = arg;
+    int clut = CLUT_BG8 + (d->bright ? CLUT_BRIGHT : 0);
+    int texSize = AFFINE_BG_MAX;
+    struct Texture tex = {NULL, 0, 0, GS_PSM_T8, AFFINE_BG_MAX / 64, 9, 9, sAffineBgVram};
+    int edge = sAffineBgWraps ? 0 : 1;
+    const float corners[4][2] = {{d->x0, d->first}, {d->x1, d->first}, {d->x0, d->last + 1}, {d->x1, d->last + 1}};
+
+    // A repeating one is its own size, for the GS to repeat
+    if (sAffineBgWraps)
+    {
+        tex.tw = tex.th = __builtin_ctz(sAffineBgSize);
+        texSize = sAffineBgSize;
+    }
+    UseClut(clut);
+    AdBegin(4);
+    Ad(GS_TEX0_1, Tex0(&tex, clut, 0, 0));
+    Ad(GS_CLAMP_1, sAffineBgWraps ? 0 : GS_SETREG_CLAMP(GS_CMODE_REGION_CLAMP, GS_CMODE_REGION_CLAMP,
+                                                         0, sAffineBgSize + 1, 0, sAffineBgSize + 1));
+    Ad(GS_RGBAQ, GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0) | ((uint64_t)FloatBits(1.0f) << 32));
+    Ad(GS_PRIM, GS_PRIM_PRIM_TRISTRIP | (1 << 4) | sPrimBlend); // textured, STQ
+    for (int i = 0; i < 4; i++)
+    {
+        float u, v;
+
+        AffineBgTexel(d->s, corners[i][0], corners[i][1], &u, &v);
+        // Outside a background that doesn't repeat is its clear edge
+        if (!sAffineBgWraps)
+        {
+            u += edge;
+            v += edge;
+        }
+        u += 0.25f;
+        v += 0.25f;
+        AdBegin(2);
+        Ad(GS_ST, (uint64_t)FloatBits(u / texSize) | ((uint64_t)FloatBits(v / texSize) << 32));
+        Ad(GS_XYZ2, Xyz(sOriginX + (int)(corners[i][0] * SCALE), sOriginY + (int)(corners[i][1] * SCALE)));
+    }
+    AdBegin(2);
+    Ad(GS_CLAMP_1, 0);
+    Ad(GS_RGBAQ, GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0));
+}
+
 // Draws a layer, with its pixels marked or not: when blending, marked if it's
 // a second target, and for a brightness change, if it's a first target. A
 // first target of blending is blended where the pixel below is marked, like
@@ -576,17 +813,17 @@ static void DrawLayer(void (*draw)(const void *), const void *arg, int firstTarg
         draw(arg);
         return;
     }
+    // Both passes mark what they draw, so the second doesn't draw over the
+    // first's pixels: blended over marked pixels, then as it is elsewhere
+    SetMark(1);
     SetMarkTest(1);
     sPrimBlend = 1 << 6;
     if (eva + evb != 16 && evb != 16)
     {
-        // B * evb first, keeping the marks
-        AdBegin(2);
-        Ad(GS_FRAME_1, Frame(0x80000000));
+        // B * evb first, then A * eva added
+        AdBegin(1);
         Ad(GS_ALPHA_1, GS_SETREG_ALPHA(1, 2, 2, 2, evb * 8));
         draw(arg);
-        AdBegin(1);
-        Ad(GS_FRAME_1, Frame(0));
     }
     AdBegin(1);
     if (eva + evb == 16)
@@ -598,6 +835,17 @@ static void DrawLayer(void (*draw)(const void *), const void *arg, int firstTarg
     SetMarkTest(0);
     draw(arg);
     SetMarkTest(-1);
+    // Then the layer's own mark, if it's not a second target, written over
+    // its pixels without their colors
+    if (!mark)
+    {
+        SetMark(0);
+        AdBegin(1);
+        Ad(GS_FRAME_1, Frame(0x00FFFFFF));
+        draw(arg);
+        AdBegin(1);
+        Ad(GS_FRAME_1, Frame(0));
+    }
 }
 
 static void BeginFrame(void)
@@ -606,8 +854,12 @@ static void BeginFrame(void)
     gsKit_clear(sGs, GS_SETREG_RGBAQ(0, 0, 0, 0x80, 0));
 }
 
-static void DrawSegment(const struct GsLineState *s, int first, int last, const struct Segment *seg,
-                        const uint8_t *vram, const uint16_t *pltt, const uint16_t *oam)
+// What of a part of the screen to draw: the backdrop, a background, or the
+// sprites of a priority
+enum { PART_BACKDROP, PART_BACKGROUND, PART_SPRITES };
+
+static void DrawSegmentPart(const struct GsLineState *s, int first, int last, const struct Segment *seg, int part, int which,
+                            const uint8_t *vram, const uint16_t *pltt, const uint16_t *oam)
 {
     int mask = seg->mask;
     int bgs = (s->dispcnt >> 8) & 0xF & mask;
@@ -618,52 +870,112 @@ static void DrawSegment(const struct GsLineState *s, int first, int last, const 
     int evy = s->bldy & 0x1F;
     // First targets of a brightness change use brightened palettes
     int brighten = effects && blend >= 2 && evy;
-    uint16_t backdrop = pltt[0] & 0x7FFF;
 
     if (eva > 16)
         eva = 16;
     if (evb > 16)
         evb = 16;
-    if (evy > 16)
-        evy = 16;
+    if ((part == PART_BACKGROUND && !(bgs & (1 << which))) || (part == PART_SPRITES && !objOn))
+        return;
 
     AdBegin(1);
     Ad(GS_SCISSOR_1, GS_SETREG_SCISSOR(sOriginX + seg->x0 * SCALE, sOriginX + seg->x1 * SCALE - 1,
                                        sOriginY + first * SCALE, sOriginY + (last + 1) * SCALE - 1));
-    if (brighten && (s->bldcnt & 0x20))
-        backdrop = Brighten(backdrop);
-    // The backdrop, marked if it's a second target of blending
-    DrawRect(seg->x0, first, seg->x1, last + 1, backdrop, (s->bldcnt & (1 << 13)) ? 0x80 : 0x01, 0);
-    for (int priority = 3; priority >= 0; priority--)
+    if (part == PART_BACKDROP)
     {
-        for (int bg = 3; bg >= 0; bg--)
-        {
-            if ((bgs & (1 << bg)) && (s->bgcnt[bg] & 3) == priority)
-            {
-                struct BgDraw d = {s, bg, first, last, seg->x0, seg->x1, vram, brighten && (s->bldcnt & (1 << bg))};
+        uint16_t backdrop = pltt[0] & 0x7FFF;
 
-                DrawLayer(DrawBackground, &d, effects && blend == 1 && (s->bldcnt & (1 << bg)),
-                          (s->bldcnt >> (8 + bg)) & 1, eva, evb);
-            }
-        }
-        if (!objOn)
-            continue;
+        if (brighten && (s->bldcnt & 0x20))
+            backdrop = Brighten(backdrop);
+        // Marked if it's a second target of blending
+        DrawRect(seg->x0, first, seg->x1, last + 1, backdrop, (s->bldcnt & (1 << 13)) ? 0x80 : 0x01, 0);
+    }
+    else if (part == PART_BACKGROUND)
+    {
+        int bg = which;
+        struct BgDraw d = {s, bg, first, last, seg->x0, seg->x1, vram, brighten && (s->bldcnt & (1 << bg))};
+
+        DrawLayer((s->dispcnt & 7) == 1 && bg == 2 ? DrawAffineBackground : DrawBackground, &d,
+                  effects && blend == 1 && (s->bldcnt & (1 << bg)), (s->bldcnt >> (8 + bg)) & 1, eva, evb);
+    }
+    else
+    {
         for (int i = 127; i >= 0; i--)
         {
             const uint16_t *attr = oam + i * 4;
             // Semi-transparent sprites blend whatever the effects, and aren't
             // brightened
             int semi = OAM_MODE(attr[0]) == 1;
+            int firstTarget = semi || (effects && blend == 1 && (s->bldcnt & 0x10));
             struct SpriteDraw d = {attr, 0, 0, 0, 0, first, last, seg->x0, seg->x1,
                                    brighten && !semi && (s->bldcnt & 0x10)};
 
-            if (OAM_PRIORITY(attr[2]) != priority || OAM_MODE(attr[0]) == 2
+            if (OAM_PRIORITY(attr[2]) != which || OAM_MODE(attr[0]) == 2
              || !SpriteShows(attr, first, last, seg->x0, seg->x1, &d.x, &d.y, &d.w, &d.h))
                 continue;
-            DrawLayer(DrawSprite, &d, semi || (effects && blend == 1 && (s->bldcnt & 0x10)),
-                      (s->bldcnt >> 12) & 1, eva, evb);
+            if (OAM_AFFINE(attr[0]))
+            {
+                struct AffineDraw a = {attr, oam, d.x, d.y, d.w, d.h, sAffineSlot[i], d.bright};
+
+                DrawLayer(DrawAffineSprite, &a, firstTarget, (s->bldcnt >> 12) & 1, eva, evb);
+                continue;
+            }
+            DrawLayer(DrawSprite, &d, firstTarget, (s->bldcnt >> 12) & 1, eva, evb);
         }
     }
+}
+
+// Draws a part of lines first..last, in each part of their width the windows
+// make, with the registers of the first
+static void DrawPartOfLines(const struct GsLineState *lines, int first, int last, int part, int which,
+                            const uint8_t *vram, const uint16_t *pltt, const uint16_t *oam)
+{
+    struct Segment segments[GBA_WIDTH];
+    int count = LineSegments(&lines[first], first, segments);
+
+    for (int i = 0; i < count; i++)
+        DrawSegmentPart(&lines[first], first, last, &segments[i], part, which, vram, pltt, oam);
+}
+
+// Whether the lines only differ in the backgrounds' scrolling and BG2's
+// matrix, so each layer can be drawn whole in turn
+static int OnlyScrollChanges(const struct GsLineState *lines)
+{
+    struct GsLineState first = lines[0];
+
+    memset(first.hofs, 0, sizeof(first.hofs));
+    memset(first.vofs, 0, sizeof(first.vofs));
+    memset(first.bg2Affine, 0, sizeof(first.bg2Affine));
+    for (int i = 1; i < GBA_HEIGHT; i++)
+    {
+        struct GsLineState line = lines[i];
+
+        memset(line.hofs, 0, sizeof(line.hofs));
+        memset(line.vofs, 0, sizeof(line.vofs));
+        memset(line.bg2Affine, 0, sizeof(line.bg2Affine));
+        if (memcmp(&line, &first, sizeof(line)) != 0)
+            return 0;
+    }
+    return 1;
+}
+
+// The last line from first with the same windows and, for a background, the
+// same scrolling (and matrix, for BG2)
+static int LastLineLike(const struct GsLineState *lines, int first, int bg)
+{
+    int last = first;
+    int windows = LineWindows(&lines[first], first);
+
+    while (last + 1 < GBA_HEIGHT && LineWindows(&lines[last + 1], last + 1) == windows)
+    {
+        const struct GsLineState *a = &lines[first], *b = &lines[last + 1];
+
+        if (bg >= 0 && (a->hofs[bg] != b->hofs[bg] || a->vofs[bg] != b->vofs[bg]
+                     || (bg == 2 && memcmp(a->bg2Affine, b->bg2Affine, sizeof(a->bg2Affine)) != 0)))
+            break;
+        last++;
+    }
+    return last;
 }
 
 void PS2GS_DrawLines(const struct GsLineState *lines, const uint8_t *vram, const uint16_t *pltt, const uint16_t *oam)
@@ -700,17 +1012,76 @@ void PS2GS_DrawLines(const struct GsLineState *lines, const uint8_t *vram, const
         for (int j = 0; j < CLUT_BRIGHT; j++)
             UploadClut(i + j);
     }
+    for (int i = 0; i < GBA_HEIGHT; i++)
+    {
+        if ((lines[i].dispcnt & 7) == 1 && (lines[i].dispcnt & 0x400))
+        {
+            BuildAffineBackground(lines[i].bgcnt[2], vram);
+            break;
+        }
+    }
+    for (int i = 0, slots = 0; i < 128; i++)
+    {
+        const uint16_t *attr = oam + i * 4;
+        int x, y, w, h;
+
+        sAffineSlot[i] = -1;
+        if (OAM_AFFINE(attr[0]) && OAM_MODE(attr[0]) != 2 && slots < AFFINE_SLOTS
+         && SpriteShows(attr, 0, GBA_HEIGHT - 1, 0, GBA_WIDTH, &x, &y, &w, &h))
+        {
+            sAffineSlot[i] = slots++;
+            BuildAffineSprite(sAffineSlot[i], attr, vram);
+        }
+    }
     SetDrawState();
 
-    for (int first = 0; first < GBA_HEIGHT;)
+    if (OnlyScrollChanges(lines))
     {
-        int last = NextBand(lines, first);
-        struct Segment segments[GBA_WIDTH];
-        int count = LineSegments(&lines[first], first, segments);
+        // Each layer whole, in the order they cover each other, split only
+        // where its own scrolling changes, like with waves or clouds
+        const struct GsLineState *s = &lines[0];
 
-        for (int i = 0; i < count; i++)
-            DrawSegment(&lines[first], first, last, &segments[i], vram, pltt, oam);
-        first = last + 1;
+        for (int first = 0, last; first < GBA_HEIGHT; first = last + 1)
+        {
+            last = LastLineLike(lines, first, -1);
+            DrawPartOfLines(lines, first, last, PART_BACKDROP, 0, vram, pltt, oam);
+        }
+        for (int priority = 3; priority >= 0; priority--)
+        {
+            for (int bg = 3; bg >= 0; bg--)
+            {
+                if (!(s->dispcnt & (0x100 << bg)) || (s->bgcnt[bg] & 3) != priority)
+                    continue;
+                for (int first = 0, last; first < GBA_HEIGHT; first = last + 1)
+                {
+                    last = LastLineLike(lines, first, bg);
+                    DrawPartOfLines(lines, first, last, PART_BACKGROUND, bg, vram, pltt, oam);
+                }
+            }
+            for (int first = 0, last; first < GBA_HEIGHT; first = last + 1)
+            {
+                last = LastLineLike(lines, first, -1);
+                DrawPartOfLines(lines, first, last, PART_SPRITES, priority, vram, pltt, oam);
+            }
+        }
+        return;
+    }
+    // Otherwise band by band of lines with the same registers
+    for (int first = 0, last; first < GBA_HEIGHT; first = last + 1)
+    {
+        const struct GsLineState *s = &lines[first];
+
+        last = NextBand(lines, first);
+        DrawPartOfLines(lines, first, last, PART_BACKDROP, 0, vram, pltt, oam);
+        for (int priority = 3; priority >= 0; priority--)
+        {
+            for (int bg = 3; bg >= 0; bg--)
+            {
+                if ((s->bgcnt[bg] & 3) == priority)
+                    DrawPartOfLines(lines, first, last, PART_BACKGROUND, bg, vram, pltt, oam);
+            }
+            DrawPartOfLines(lines, first, last, PART_SPRITES, priority, vram, pltt, oam);
+        }
     }
 }
 
