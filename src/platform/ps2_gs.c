@@ -74,6 +74,14 @@ static uint8_t sAffineBg[AFFINE_BG_MAX * AFFINE_BG_MAX] __attribute__((aligned(6
 static uint32_t sAffineBgVram;
 static int sAffineBgSize, sAffineBgWraps;
 
+// A whole text background drawn into a texture, for one that scrolls
+// differently on many lines, like the title screen's clouds: then each run of
+// lines is one sprite from it instead of all its tiles again
+#define LAYER_MAX 512
+static uint32_t sLayerVram;
+static int sLayerInTexture; // the background and its brightness there, or -1
+static uint8_t sLayerUsesTexture[4]; // this frame
+
 static GSGLOBAL *sGs;
 // Where the GBA's screen goes in the frame buffer
 static int sOriginX, sOriginY;
@@ -174,6 +182,10 @@ void PS2GS_Init(void)
     for (int i = 0; i < AFFINE_SLOTS; i++)
         sAffineVram[i] = gsKit_vram_alloc(sGs, gsKit_texture_size(AFFINE_TEX_SIZE, AFFINE_TEX_SIZE, GS_PSM_T8), GSKIT_ALLOC_USERBUFFER);
     sAffineBgVram = gsKit_vram_alloc(sGs, gsKit_texture_size(AFFINE_BG_MAX, AFFINE_BG_MAX, GS_PSM_T8), GSKIT_ALLOC_USERBUFFER);
+    // Drawn into, so it has to start on one of the GS's 8 KB pages
+    sLayerVram = gsKit_vram_alloc(sGs, gsKit_texture_size(LAYER_MAX, LAYER_MAX, GS_PSM_CT16) + 8192, GSKIT_ALLOC_USERBUFFER);
+    if (sLayerVram != GSKIT_ALLOC_ERROR)
+        sLayerVram = (sLayerVram + 8191) & ~8191;
 }
 
 // Tile t's top left in a layout
@@ -274,8 +286,11 @@ static void SetDrawState(void)
 
 // The frame buffer's alpha bit marks pixels for blending (see DrawLayer).
 // Textures give color 0 alpha 0, which isn't drawn, and the rest the mark.
+static int sMarkAlpha;
+
 static void SetMark(int mark)
 {
+    sMarkAlpha = mark ? 0x80 : 0x01; // for untextured pixels, see DrawMosaic
     AdBegin(1);
     Ad(GS_TEXA, (uint64_t)0 | ((uint64_t)(mark ? 0x80 : 0x01) << 32));
 }
@@ -296,8 +311,8 @@ static inline uint64_t Frame(uint32_t mask)
 
 static uint64_t sPrimBlend;
 
-// A tile of 8x8 texels at (u, v) at x, y on the GBA's screen
-static inline void DrawTile(int x, int y, int u, int v, int hflip, int vflip)
+// A tile of 8x8 texels at (u, v) at sx, sy of what's drawn into, size wide
+static inline void DrawTileAt(int sx, int sy, int size, int u, int v, int hflip, int vflip)
 {
     // Texels are sampled a quarter in from their edges, so rounding in the GS
     // can't pick the neighbor
@@ -305,15 +320,19 @@ static inline void DrawTile(int x, int y, int u, int v, int hflip, int vflip)
     int v0 = vflip ? (v + 8) * 16 - 4 : v * 16 + 4;
     int u1 = hflip ? u0 - 128 : u0 + 128;
     int v1 = vflip ? v0 - 128 : v0 + 128;
-    int sx = sOriginX + x * SCALE;
-    int sy = sOriginY + y * SCALE;
 
     AdBegin(5);
     Ad(GS_PRIM, GS_PRIM_PRIM_SPRITE | (1 << 4) | (1 << 8) | sPrimBlend); // textured, UV
     Ad(GS_UV, Uv(u0, v0));
     Ad(GS_XYZ2, Xyz(sx, sy));
     Ad(GS_UV, Uv(u1, v1));
-    Ad(GS_XYZ2, Xyz(sx + 8 * SCALE, sy + 8 * SCALE));
+    Ad(GS_XYZ2, Xyz(sx + size, sy + size));
+}
+
+// A tile of 8x8 texels at (u, v) at x, y on the GBA's screen
+static inline void DrawTile(int x, int y, int u, int v, int hflip, int vflip)
+{
+    DrawTileAt(sOriginX + x * SCALE, sOriginY + y * SCALE, 8 * SCALE, u, v, hflip, vflip);
 }
 
 static void DrawRect(int x0, int y0, int x1, int y1, uint16_t color, int alpha, int blend)
@@ -349,6 +368,11 @@ struct Segment
     int mask;
 };
 
+// Where the sprite window is: the pixels of the sprites that make it, on the
+// lines it's on
+static uint8_t sObjWindow[GBA_HEIGHT][GBA_WIDTH];
+static int sObjWindowUsed;
+
 static int LineSegments(const struct GsLineState *s, int line, struct Segment *segments)
 {
     int windows = LineWindows(s, line);
@@ -367,6 +391,8 @@ static int LineSegments(const struct GsLineState *s, int line, struct Segment *s
             mask = s->winin & 0x3F;
         else if ((windows & 2) && InsideRange(s->win1h >> 8, s->win1h & 0xFF, x))
             mask = (s->winin >> 8) & 0x3F;
+        else if ((s->dispcnt & 0x9000) == 0x9000 && sObjWindow[line][x])
+            mask = (s->winout >> 8) & 0x3F;
         else
             mask = s->winout & 0x3F;
         if (count > 0 && segments[count - 1].mask == mask)
@@ -384,7 +410,8 @@ static int NextBand(const struct GsLineState *lines, int first)
     int windows = LineWindows(&lines[first], first);
 
     while (last + 1 < GBA_HEIGHT && memcmp(&lines[last + 1], &lines[first], sizeof(lines[0])) == 0
-        && LineWindows(&lines[last + 1], last + 1) == windows)
+        && LineWindows(&lines[last + 1], last + 1) == windows
+        && (!sObjWindowUsed || memcmp(sObjWindow[last + 1], sObjWindow[first], GBA_WIDTH) == 0))
         last++;
     return last;
 }
@@ -412,13 +439,172 @@ static int SpriteShows(const uint16_t *attr, int first, int last, int x0, int x1
     return *x + *w > x0 && *x < x1 && *y + *h > first && *y <= last;
 }
 
-int PS2GS_CanDraw(const struct GsLineState *lines, const uint16_t *oam)
+// The color numbers at a pixel of the GBA's screen, like the software renderer
+// works them out: in the backgrounds' or the sprites' 256, or 0 for clear
+
+static int TextBgColor(const struct GsLineState *s, int bg, int x, int y, const uint8_t *vram)
+{
+    static const uint16_t sMapSizes[4][2] = {{256, 256}, {512, 256}, {256, 512}, {512, 512}};
+    uint16_t control = s->bgcnt[bg];
+    int mapWidth = sMapSizes[control >> 14][0];
+    int mapHeight = sMapSizes[control >> 14][1];
+    const uint16_t *map = (const uint16_t *)(vram + ((control >> 8) & 0x1F) * 0x800);
+    const uint8_t *tiles = vram + ((control >> 2) & 3) * 0x4000;
+    int xx = (x + s->hofs[bg]) & 0x1FF;
+    int yy = (y + s->vofs[bg]) & 0x1FF;
+    uint16_t entry;
+    int tx, ty;
+
+    if (xx > 255 && mapWidth > 256)
+        map += 0x400;
+    if (yy > 255 && mapHeight > 256)
+        map += mapWidth > 256 ? 0x800 : 0x400;
+    xx &= 0xFF;
+    yy &= 0xFF;
+    entry = map[yy / 8 * 32 + xx / 8];
+    tx = (entry & (1 << 10)) ? 7 - xx % 8 : xx % 8;
+    ty = (entry & (1 << 11)) ? 7 - yy % 8 : yy % 8;
+    if (control & 0x80)
+        return tiles[(((entry & 0x3FF) * 64) & 0xFFFF) + ty * 8 + tx];
+    else
+    {
+        int color = (tiles[(((entry & 0x3FF) * 32) & 0xFFFF) + ty * 4 + tx / 2] >> ((tx & 1) * 4)) & 0xF;
+
+        return color ? (entry >> 12) * 16 + color : 0;
+    }
+}
+
+static int AffineBgColor(const struct GsLineState *s, int x, int y, const uint8_t *vram)
+{
+    uint16_t control = s->bgcnt[2];
+    const uint16_t *a = s->bg2Affine;
+    int size = 128 << ((control >> 14) & 3);
+    int32_t refX = (int32_t)((a[4] | ((uint32_t)a[5] << 16)) << 4) >> 4;
+    int32_t refY = (int32_t)((a[6] | ((uint32_t)a[7] << 16)) << 4) >> 4;
+    int xx = (refX + y * (int16_t)a[1] + x * (int16_t)a[0]) >> 8;
+    int yy = (refY + y * (int16_t)a[3] + x * (int16_t)a[2]) >> 8;
+    const uint8_t *map = vram + ((control >> 8) & 0x1F) * 0x800;
+    const uint8_t *tiles = vram + ((control >> 2) & 3) * 0x4000;
+
+    if (control & (1 << 13))
+    {
+        xx &= size - 1;
+        yy &= size - 1;
+    }
+    else if (xx < 0 || yy < 0 || xx >= size || yy >= size)
+        return 0;
+    return tiles[((map[(xx >> 3) + (yy >> 3) * (size / 8)] << 6) + ((yy & 7) << 3) + (xx & 7)) & 0xFFFF];
+}
+
+static int SpriteColor(const uint16_t *attr, const uint16_t *oam, int x, int y, const uint8_t *vram)
+{
+    int boxX, boxY, boxWidth, boxHeight;
+    int w = sObjSizes[OAM_SHAPE(attr[0])][OAM_SIZE(attr[1])][0];
+    int h = sObjSizes[OAM_SHAPE(attr[0])][OAM_SIZE(attr[1])][1];
+    int tx, ty, block, color;
+    const uint8_t *objTiles = vram + 0x10000;
+
+    if (!SpriteShows(attr, y, y, x, x + 1, &boxX, &boxY, &boxWidth, &boxHeight))
+        return 0;
+    tx = x - (boxX + boxWidth / 2);
+    ty = y - (boxY + boxHeight / 2);
+    if (OAM_AFFINE(attr[0]))
+    {
+        int matrix = (attr[1] >> 9) & 0x1F;
+        int16_t pa = oam[(matrix * 4 + 0) * 4 + 3], pb = oam[(matrix * 4 + 1) * 4 + 3];
+        int16_t pc = oam[(matrix * 4 + 2) * 4 + 3], pd = oam[(matrix * 4 + 3) * 4 + 3];
+        int lx = tx, ly = ty;
+
+        tx = ((pa * lx + pb * ly) >> 8) + w / 2;
+        ty = ((pc * lx + pd * ly) >> 8) + h / 2;
+    }
+    else
+    {
+        tx += w / 2;
+        ty += h / 2;
+        if (OAM_HFLIP(attr[1]))
+            tx = w - 1 - tx;
+        if (OAM_VFLIP(attr[1]))
+            ty = h - 1 - ty;
+    }
+    if (tx < 0 || ty < 0 || tx >= w || ty >= h)
+        return 0;
+    block = ty / 8 * (w / 8) + tx / 8;
+    if (OAM_8BPP(attr[0]))
+        return objTiles[((block * 2 + OAM_TILE(attr[2])) * 32 + (ty % 8) * 8 + tx % 8) & 0x7FFF];
+    color = (objTiles[((block + OAM_TILE(attr[2])) * 32 + (ty % 8) * 4 + (tx % 8) / 2) & 0x7FFF] >> ((tx & 1) * 4)) & 0xF;
+    return color ? OAM_PALETTE(attr[2]) * 16 + color : 0;
+}
+
+// The sprite window, from the pixels of the sprites that make it
+static void MakeObjWindow(const struct GsLineState *lines, const uint8_t *vram, const uint16_t *oam)
+{
+    int on = 0;
+
+    for (int i = 0; i < GBA_HEIGHT; i++)
+        on |= (lines[i].dispcnt & 0x9000) == 0x9000;
+    if (sObjWindowUsed)
+        memset(sObjWindow, 0, sizeof(sObjWindow));
+    sObjWindowUsed = 0;
+    if (!on)
+        return;
+    for (int i = 0; i < 128; i++)
+    {
+        const uint16_t *attr = oam + i * 4;
+        int x, y, w, h;
+
+        if (OAM_MODE(attr[0]) != 2 || !SpriteShows(attr, 0, GBA_HEIGHT - 1, 0, GBA_WIDTH, &x, &y, &w, &h))
+            continue;
+        for (int py = y < 0 ? 0 : y; py < y + h && py < GBA_HEIGHT; py++)
+        {
+            int px0 = x < 0 ? 0 : x, px1 = x + w < GBA_WIDTH ? x + w : GBA_WIDTH;
+
+            // An unturned sprite's row straight from its tiles, as it's most
+            // of them and SpriteColor for every pixel takes a while
+            if (!OAM_AFFINE(attr[0]))
+            {
+                int sw = w, sh = h;
+                int ty = OAM_VFLIP(attr[1]) ? sh - 1 - (py - y) : py - y;
+                const uint8_t *objTiles = vram + 0x10000;
+
+                for (int px = px0; px < px1; px++)
+                {
+                    int tx = OAM_HFLIP(attr[1]) ? sw - 1 - (px - x) : px - x;
+                    int block = ty / 8 * (sw / 8) + tx / 8;
+                    int color;
+
+                    if (OAM_8BPP(attr[0]))
+                        color = objTiles[((block * 2 + OAM_TILE(attr[2])) * 32 + (ty % 8) * 8 + tx % 8) & 0x7FFF];
+                    else
+                        color = (objTiles[((block + OAM_TILE(attr[2])) * 32 + (ty % 8) * 4 + (tx % 8) / 2) & 0x7FFF] >> ((tx & 1) * 4)) & 0xF;
+                    if (color)
+                    {
+                        sObjWindow[py][px] = 1;
+                        sObjWindowUsed = 1;
+                    }
+                }
+                continue;
+            }
+            for (int px = px0; px < px1; px++)
+            {
+                if (SpriteColor(attr, oam, px, py, vram))
+                {
+                    sObjWindow[py][px] = 1;
+                    sObjWindowUsed = 1;
+                }
+            }
+        }
+    }
+}
+
+int PS2GS_CanDraw(const struct GsLineState *lines, const uint8_t *vram, const uint16_t *oam)
 {
     int brightMode = 0, brightEvy = 0;
-    uint8_t affineSeen[128] = {0};
     int affineCount = 0;
+    int spritesOn = 0;
     int affineBgControl = -1; // one affine background for the frame
 
+    MakeObjWindow(lines, vram, oam);
     for (int first = 0; first < GBA_HEIGHT;)
     {
         const struct GsLineState *s = &lines[first];
@@ -443,18 +629,11 @@ int PS2GS_CanDraw(const struct GsLineState *lines, const uint16_t *oam)
             {
                 int size = 128 << ((s->bgcnt[2] >> 14) & 3);
 
-                if ((s->bgcnt[2] & 0x40) && (s->mosaic & 0xFF))
-                    return 0;
                 if ((s->bgcnt[2] & (1 << 13)) ? size > AFFINE_BG_MAX : size + 2 > AFFINE_BG_MAX)
                     return 0;
                 if (affineBgControl >= 0 && affineBgControl != (s->bgcnt[2] & 0xFFBF))
                     return 0;
                 affineBgControl = s->bgcnt[2] & 0xFFBF;
-            }
-            for (int bg = 0; bg < 4; bg++)
-            {
-                if ((bgs & (1 << bg)) && (s->bgcnt[bg] & 0x40) && (s->mosaic & 0xFF))
-                    return 0;
             }
             (void)shown;
             // One brightness change for the frame, for its palettes
@@ -468,33 +647,24 @@ int PS2GS_CanDraw(const struct GsLineState *lines, const uint16_t *oam)
                 brightEvy = evy;
             }
         }
-        if (objOn)
-        {
-            if (!(s->dispcnt & 0x40)) // 2D sprite tiles
-                return 0;
-            for (int i = 0; i < 128; i++)
-            {
-                const uint16_t *attr = oam + i * 4;
-                int x, y, w, h;
-
-                if (!SpriteShows(attr, first, last, 0, GBA_WIDTH, &x, &y, &w, &h))
-                    continue;
-                // The sprite window only matters where it's on
-                if (OAM_MODE(attr[0]) == 2 && !(s->dispcnt & 0x8000))
-                    continue;
-                if (OAM_MODE(attr[0]) >= 2
-                 || (OAM_MOSAIC(attr[0]) && (s->mosaic & 0xFF00))
-                 || (OAM_8BPP(attr[0]) && (OAM_TILE(attr[2]) & 1)))
-                    return 0;
-                if (OAM_AFFINE(attr[0]) && !affineSeen[i])
-                {
-                    affineSeen[i] = 1;
-                    if (++affineCount > AFFINE_SLOTS)
-                        return 0;
-                }
-            }
-        }
+        if (objOn && !(s->dispcnt & 0x40)) // 2D sprite tiles
+            return 0;
+        spritesOn |= objOn;
         first = last + 1;
+    }
+    // The sprites once for the frame, not for every band of lines
+    for (int i = 0; i < 128 && spritesOn; i++)
+    {
+        const uint16_t *attr = oam + i * 4;
+        int x, y, w, h;
+
+        // Sprites of the sprite window aren't drawn (see MakeObjWindow)
+        if (OAM_MODE(attr[0]) == 2 || !SpriteShows(attr, 0, GBA_HEIGHT - 1, 0, GBA_WIDTH, &x, &y, &w, &h))
+            continue;
+        if (OAM_MODE(attr[0]) == 3 || (OAM_8BPP(attr[0]) && (OAM_TILE(attr[2]) & 1)))
+            return 0;
+        if (OAM_AFFINE(attr[0]) && ++affineCount > AFFINE_SLOTS)
+            return 0;
     }
     sBrightMode = brightMode;
     sBrightEvy = brightEvy;
@@ -800,6 +970,156 @@ static void DrawAffineBackground(const void *arg)
     Ad(GS_RGBAQ, GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0));
 }
 
+// A background or a sprite in mosaic: blocks of cellWidth x cellHeight of
+// the screen each take the color of their top left pixel. The blocks of a
+// color next to each other in a row go as one rectangle.
+struct MosaicDraw
+{
+    const struct GsLineState *s;
+    int bg; // or -1 for the sprite
+    const uint16_t *attr, *oam;
+    int first, last, x0, x1;
+    int boxX0, boxY0, boxX1, boxY1; // what can show
+    int cellWidth, cellHeight;
+    int bright;
+    const uint8_t *vram;
+    const uint16_t *pltt;
+};
+
+static void DrawMosaic(const void *arg)
+{
+    const struct MosaicDraw *d = arg;
+    int y0Limit = d->first > d->boxY0 ? d->first : d->boxY0;
+    int y1Limit = d->last + 1 < d->boxY1 ? d->last + 1 : d->boxY1;
+    int x0Limit = d->x0 > d->boxX0 ? d->x0 : d->boxX0;
+    int x1Limit = d->x1 < d->boxX1 ? d->x1 : d->boxX1;
+
+    for (int cy = y0Limit - y0Limit % d->cellHeight; cy < y1Limit; cy += d->cellHeight)
+    {
+        int y0 = cy > y0Limit ? cy : y0Limit;
+        int y1 = cy + d->cellHeight < y1Limit ? cy + d->cellHeight : y1Limit;
+        int runStart = x0Limit, runColor = 0;
+
+        // One more time past the end, to draw the last run
+        for (int cx = x0Limit - x0Limit % d->cellWidth; ; cx += d->cellWidth)
+        {
+            int x0 = cx > x0Limit ? cx : x0Limit;
+            int done = x0 >= x1Limit;
+            int color = 0;
+
+            if (!done)
+            {
+                if (d->bg < 0)
+                    color = SpriteColor(d->attr, d->oam, cx, cy, d->vram);
+                else if ((d->s->dispcnt & 7) == 1 && d->bg == 2)
+                    color = AffineBgColor(d->s, cx, cy, d->vram);
+                else
+                    color = TextBgColor(d->s, d->bg, cx, cy, d->vram);
+                color = color ? (d->pltt[(d->bg < 0 ? 256 : 0) + color] & 0x7FFF) | 0x8000 : 0;
+            }
+            if (color != runColor || done)
+            {
+                if (runColor)
+                    DrawRect(runStart, y0, done ? x1Limit : x0, y1,
+                             d->bright ? Brighten(runColor & 0x7FFF) : runColor & 0x7FFF, sMarkAlpha, sPrimBlend != 0);
+                runStart = x0;
+                runColor = color;
+            }
+            if (done)
+                break;
+        }
+    }
+}
+
+// Draws all of a text background into sLayerVram, at its own size, with
+// alpha 0 where it's clear
+static void DrawBackgroundIntoTexture(const struct GsLineState *s, int bg, int bright, const uint8_t *vram)
+{
+    static const uint16_t sMapSizes[4][2] = {{256, 256}, {512, 256}, {256, 512}, {512, 512}};
+    uint16_t control = s->bgcnt[bg];
+    int is8bpp = (control >> 7) & 1;
+    int charBase = (control >> 2) & 3;
+    const uint16_t *map = (const uint16_t *)(vram + ((control >> 8) & 0x1F) * 0x800);
+    int mapWidth = sMapSizes[control >> 14][0];
+    int mapHeight = sMapSizes[control >> 14][1];
+    const struct Texture *tex = &sTex[is8bpp ? TEX_BG8 : TEX_BG4];
+    int clut = (is8bpp ? CLUT_BG8 : CLUT_BG4) + (bright ? CLUT_BRIGHT : 0);
+    int palette = -1;
+
+    if (sLayerInTexture == bg * 2 + bright)
+        return;
+    sLayerInTexture = bg * 2 + bright;
+    AdBegin(4);
+    Ad(GS_FRAME_1, GS_SETREG_FRAME_1(sLayerVram / 8192, LAYER_MAX / 64, GS_PSM_CT16, 0));
+    Ad(GS_SCISSOR_1, GS_SETREG_SCISSOR(0, mapWidth - 1, 0, mapHeight - 1));
+    Ad(GS_TEST_1, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 1, 1)); // the clear goes in, alpha 0 and all
+    Ad(GS_PRIM, GS_PRIM_PRIM_SPRITE);
+    AdBegin(3);
+    Ad(GS_RGBAQ, GS_SETREG_RGBAQ(0, 0, 0, 0, 0));
+    Ad(GS_XYZ2, Xyz(0, 0));
+    Ad(GS_XYZ2, Xyz(mapWidth, mapHeight));
+    SetMarkTest(-1);
+    SetMark(1); // opaque texels get alpha 1
+    UseClut(clut);
+    if (is8bpp)
+    {
+        AdBegin(1);
+        Ad(GS_TEX0_1, Tex0(tex, clut, 0, 0));
+    }
+    for (int ty = 0; ty < mapHeight / 8; ty++)
+    {
+        const uint16_t *row = map + (ty & 31) * 32;
+
+        if (ty >= 32)
+            row += mapWidth > 256 ? 0x800 : 0x400;
+        for (int tx = 0; tx < mapWidth / 8; tx++)
+        {
+            uint16_t entry = (tx >= 32 ? row + 0x400 : row)[tx & 31];
+            int tile;
+
+            if (is8bpp)
+            {
+                tile = (charBase * 256 + (entry & 0x3FF)) % BG_TILES_8BPP;
+            }
+            else
+            {
+                tile = (charBase * 512 + (entry & 0x3FF)) % BG_TILES_4BPP;
+                if ((entry >> 12) != palette)
+                {
+                    palette = entry >> 12;
+                    AdBegin(1);
+                    Ad(GS_TEX0_1, Tex0(tex, clut, palette, 0));
+                }
+            }
+            DrawTileAt(tx * 8, ty * 8, 8, TileU(tile), TileV(tile), (entry >> 10) & 1, (entry >> 11) & 1);
+        }
+    }
+    AdBegin(2);
+    Ad(GS_FRAME_1, GS_SETREG_FRAME_1(sGs->ScreenBuffer[sGs->ActiveBuffer & 1] / 8192, sGs->Width / 64, sGs->PSM, 0));
+    Ad(GS_TEXFLUSH, 0);
+}
+
+// Lines first..last of a background from sLayerVram, as one sprite that the
+// GS wraps around the map like the GBA does
+static void DrawBackgroundFromTexture(const void *arg)
+{
+    static const uint16_t sMapSizes[4][2] = {{256, 256}, {512, 256}, {256, 512}, {512, 512}};
+    const struct BgDraw *d = arg;
+    uint16_t control = d->s->bgcnt[d->bg];
+    struct Texture tex = {NULL, 0, 0, GS_PSM_CT16, LAYER_MAX / 64,
+                          __builtin_ctz(sMapSizes[control >> 14][0]), __builtin_ctz(sMapSizes[control >> 14][1]), sLayerVram};
+    int u0 = (d->x0 + (d->s->hofs[d->bg] & 0x1FF)) * 16 + 4;
+    int v0 = (d->first + (d->s->vofs[d->bg] & 0x1FF)) * 16 + 4;
+
+    AdBegin(6);
+    Ad(GS_TEX0_1, Tex0(&tex, 0, 0, 0));
+    Ad(GS_PRIM, GS_PRIM_PRIM_SPRITE | (1 << 4) | (1 << 8) | sPrimBlend); // textured, UV
+    Ad(GS_UV, Uv(u0, v0));
+    Ad(GS_XYZ2, Xyz(sOriginX + d->x0 * SCALE, sOriginY + d->first * SCALE));
+    Ad(GS_UV, Uv(u0 + (d->x1 - d->x0) * 16, v0 + (d->last + 1 - d->first) * 16));
+    Ad(GS_XYZ2, Xyz(sOriginX + d->x1 * SCALE, sOriginY + (d->last + 1) * SCALE));
+}
+
 // Draws a layer, with its pixels marked or not: when blending, marked if it's
 // a second target, and for a brightness change, if it's a first target. A
 // first target of blending is blended where the pixel below is marked, like
@@ -877,6 +1197,8 @@ static void DrawSegmentPart(const struct GsLineState *s, int first, int last, co
         evb = 16;
     if ((part == PART_BACKGROUND && !(bgs & (1 << which))) || (part == PART_SPRITES && !objOn))
         return;
+    if (part == PART_BACKGROUND && sLayerUsesTexture[which])
+        DrawBackgroundIntoTexture(s, which, brighten && (s->bldcnt & (1 << which)), vram);
 
     AdBegin(1);
     Ad(GS_SCISSOR_1, GS_SETREG_SCISSOR(sOriginX + seg->x0 * SCALE, sOriginX + seg->x1 * SCALE - 1,
@@ -894,9 +1216,20 @@ static void DrawSegmentPart(const struct GsLineState *s, int first, int last, co
     {
         int bg = which;
         struct BgDraw d = {s, bg, first, last, seg->x0, seg->x1, vram, brighten && (s->bldcnt & (1 << bg))};
+        int firstTarget = effects && blend == 1 && (s->bldcnt & (1 << bg));
+        int cellWidth = (s->mosaic & 0xF) + 1, cellHeight = ((s->mosaic >> 4) & 0xF) + 1;
 
-        DrawLayer((s->dispcnt & 7) == 1 && bg == 2 ? DrawAffineBackground : DrawBackground, &d,
-                  effects && blend == 1 && (s->bldcnt & (1 << bg)), (s->bldcnt >> (8 + bg)) & 1, eva, evb);
+        if ((s->bgcnt[bg] & 0x40) && cellWidth * cellHeight > 1)
+        {
+            struct MosaicDraw m = {s, bg, NULL, oam, first, last, seg->x0, seg->x1, 0, 0, GBA_WIDTH, GBA_HEIGHT,
+                                   cellWidth, cellHeight, d.bright, vram, pltt};
+
+            DrawLayer(DrawMosaic, &m, firstTarget, (s->bldcnt >> (8 + bg)) & 1, eva, evb);
+            return;
+        }
+        DrawLayer((s->dispcnt & 7) == 1 && bg == 2 ? DrawAffineBackground
+                  : sLayerUsesTexture[bg] ? DrawBackgroundFromTexture : DrawBackground, &d,
+                  firstTarget, (s->bldcnt >> (8 + bg)) & 1, eva, evb);
     }
     else
     {
@@ -913,6 +1246,14 @@ static void DrawSegmentPart(const struct GsLineState *s, int first, int last, co
             if (OAM_PRIORITY(attr[2]) != which || OAM_MODE(attr[0]) == 2
              || !SpriteShows(attr, first, last, seg->x0, seg->x1, &d.x, &d.y, &d.w, &d.h))
                 continue;
+            if (OAM_MOSAIC(attr[0]) && (s->mosaic & 0xFF00))
+            {
+                struct MosaicDraw m = {s, -1, attr, oam, first, last, seg->x0, seg->x1, d.x, d.y, d.x + d.w, d.y + d.h,
+                                       ((s->mosaic >> 8) & 0xF) + 1, ((s->mosaic >> 12) & 0xF) + 1, d.bright, vram, pltt};
+
+                DrawLayer(DrawMosaic, &m, firstTarget, (s->bldcnt >> 12) & 1, eva, evb);
+                continue;
+            }
             if (OAM_AFFINE(attr[0]))
             {
                 struct AffineDraw a = {attr, oam, d.x, d.y, d.w, d.h, sAffineSlot[i], d.bright};
@@ -966,7 +1307,8 @@ static int LastLineLike(const struct GsLineState *lines, int first, int bg)
     int last = first;
     int windows = LineWindows(&lines[first], first);
 
-    while (last + 1 < GBA_HEIGHT && LineWindows(&lines[last + 1], last + 1) == windows)
+    while (last + 1 < GBA_HEIGHT && LineWindows(&lines[last + 1], last + 1) == windows
+        && (!sObjWindowUsed || memcmp(sObjWindow[last + 1], sObjWindow[first], GBA_WIDTH) == 0))
     {
         const struct GsLineState *a = &lines[first], *b = &lines[last + 1];
 
@@ -1035,6 +1377,8 @@ void PS2GS_DrawLines(const struct GsLineState *lines, const uint8_t *vram, const
     }
     SetDrawState();
 
+    memset(sLayerUsesTexture, 0, sizeof(sLayerUsesTexture));
+    sLayerInTexture = -1;
     if (OnlyScrollChanges(lines))
     {
         // Each layer whole, in the order they cover each other, split only
@@ -1050,8 +1394,16 @@ void PS2GS_DrawLines(const struct GsLineState *lines, const uint8_t *vram, const
         {
             for (int bg = 3; bg >= 0; bg--)
             {
+                int runs = 0;
+
                 if (!(s->dispcnt & (0x100 << bg)) || (s->bgcnt[bg] & 3) != priority)
                     continue;
+                for (int first = 0, last; first < GBA_HEIGHT; first = last + 1, runs++)
+                    last = LastLineLike(lines, first, bg);
+                // Many runs of a text background that isn't in mosaic come from
+                // it drawn whole
+                sLayerUsesTexture[bg] = runs > 4 && !((s->dispcnt & 7) == 1 && bg == 2)
+                                     && !((s->bgcnt[bg] & 0x40) && (s->mosaic & 0xFF)) && sLayerVram;
                 for (int first = 0, last; first < GBA_HEIGHT; first = last + 1)
                 {
                     last = LastLineLike(lines, first, bg);

@@ -29,7 +29,7 @@ struct GsLineState
 void PS2GS_Init(void);
 // Whether the GS can draw a frame like the GBA would. Otherwise it's drawn in
 // software and shown with PS2GS_DrawImage.
-int PS2GS_CanDraw(const struct GsLineState *lines, const uint16_t *oam);
+int PS2GS_CanDraw(const struct GsLineState *lines, const uint8_t *vram, const uint16_t *oam);
 void PS2GS_DrawLines(const struct GsLineState *lines, const uint8_t *vram, const uint16_t *pltt, const uint16_t *oam);
 // A 240x160 picture in the GBA's colors
 void PS2GS_DrawImage(const uint16_t *image);

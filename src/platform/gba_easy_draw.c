@@ -1066,7 +1066,7 @@ void DrawFramePS2(void)
         SaveLineRegs(&lines[i]);
         EndLine();
     }
-    if (PS2GS_CanDraw(lines, (const uint16_t *)OAM))
+    if (PS2GS_CanDraw(lines, (const uint8_t *)VRAM_, (const uint16_t *)OAM))
     {
         PS2GS_DrawLines(lines, (const uint8_t *)VRAM_, (const uint16_t *)PLTT, (const uint16_t *)OAM);
         return;
