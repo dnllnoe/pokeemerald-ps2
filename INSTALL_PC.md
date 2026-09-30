@@ -65,6 +65,41 @@ gmake macos -j$(sysctl -n hw.ncpu)
 
 You should get an executable named `pokeemerald64`, which uses Homebrew's SDL2.
 
+## PlayStation 2
+
+The PS2 build needs Linux (or WSL) with the tools that build the game's data, and the
+[ps2dev](https://github.com/ps2dev/ps2dev) toolchain, which brings ps2sdk, gsKit and
+ps2sdk's SDL2.
+
+Install the tools the build runs on your PC:
+```
+sudo apt install build-essential git make libpng-dev
+```
+
+Then ps2dev, for example its prebuilt release in `/usr/local/ps2dev`:
+```
+cd /usr/local && curl -sL https://github.com/ps2dev/ps2dev/releases/download/v2.0.0/ps2dev-ubuntu-latest.tar.gz | sudo tar xz
+```
+
+Put the toolchain on the path for the shell you build in:
+```
+export PS2DEV=/usr/local/ps2dev PS2SDK=/usr/local/ps2dev/ps2sdk
+export PATH=$PATH:$PS2DEV/bin:$PS2DEV/ee/bin:$PS2DEV/iop/bin:$PS2SDK/bin
+```
+
+Build the PS2 version with:
+```
+make ps2 -j$(nproc)
+```
+
+You should get `pokeemerald32.elf`. It has debug information in it, which makes it about
+33 MB. `mips64r5900el-ps2-elf-strip -o pokeemerald-ps2.elf pokeemerald32.elf` makes a copy
+without it, which loads faster from a USB drive.
+
+To play it in PCSX2, start it with `pcsx2-qt -elf pokeemerald32.elf`, and turn on Host
+Filesystem in the settings so the game can save. On a PS2, start it with a launcher like
+wLaunchELF.
+
 ## GBA
 
 Follow instructions in [INSTALL.md](INSTALL.md)
