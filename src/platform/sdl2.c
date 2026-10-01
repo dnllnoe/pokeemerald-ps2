@@ -47,7 +47,6 @@ double fixedTimestep = 1.0 / 60.0; // 16.666667ms
 double timeScale = 1.0;
 struct SiiRtcInfo internalClock;
 
-static FILE *sSaveFile = NULL;
 static const char *sSavePath;
 static const char *sSettingsPath;
 static char *sDataDir;
@@ -78,7 +77,6 @@ void VDraw(SDL_Texture *texture);
 
 static void ReadSaveFile(const char *path);
 static void StoreSaveFile(void);
-static void CloseSaveFile(void);
 
 static void InitInternalClock(void);
 static void UpdateInternalClock(void);
@@ -282,8 +280,6 @@ int main(int argc, char **argv)
 #endif
     }
 
-    CloseSaveFile();
-
     SDL_DestroyWindow(sdlWindow);
     SDL_Quit();
     return 0;
@@ -291,37 +287,32 @@ int main(int argc, char **argv)
 
 static void ReadSaveFile(const char *path)
 {
-    // Check whether the saveFile exists, and create it if not
-    sSaveFile = fopen(path, "r+b");
-    if (sSaveFile == NULL)
+    FILE *file = fopen(path, "rb");
+    size_t bytesRead = 0;
+
+    if (file != NULL)
     {
-        sSaveFile = fopen(path, "w+b");
+        bytesRead = fread(FLASH_BASE, 1, sizeof(FLASH_BASE), file);
+        fclose(file);
     }
-
-    fseek(sSaveFile, 0, SEEK_END);
-    int fileSize = ftell(sSaveFile);
-    fseek(sSaveFile, 0, SEEK_SET);
-
-    // Only read as many bytes as fit inside the buffer
-    // or as many bytes as are in the file
-    int bytesToRead = (fileSize < sizeof(FLASH_BASE)) ? fileSize : sizeof(FLASH_BASE);
-
-    int bytesRead = fread(FLASH_BASE, 1, bytesToRead, sSaveFile);
-
-    // Fill the buffer if the savefile was just created or smaller than the buffer itself
-    for (int i = bytesRead; i < sizeof(FLASH_BASE); i++)
-    {
-        FLASH_BASE[i] = 0xFF;
-    }
+    // Erased flash reads as 0xFF, for a save that's missing or short
+    memset(FLASH_BASE + bytesRead, 0xFF, sizeof(FLASH_BASE) - bytesRead);
 }
 
-static void StoreSaveFile()
+// The whole save goes to the file and the file is closed every time. On a FAT
+// drive, like a PS2's USB stick, a file's size is only written when it's
+// closed, and a console gets switched off without the game closing anything.
+static void StoreSaveFile(void)
 {
-    if (sSaveFile != NULL)
+    FILE *file = fopen(sSavePath, "wb");
+
+    if (file == NULL)
     {
-        fseek(sSaveFile, 0, SEEK_SET);
-        fwrite(FLASH_BASE, 1, sizeof(FLASH_BASE), sSaveFile);
+        fprintf(stderr, "Could not write the save file %s\n", sSavePath);
+        return;
     }
+    fwrite(FLASH_BASE, 1, sizeof(FLASH_BASE), file);
+    fclose(file);
 }
 
 void Platform_StoreSaveFile(void)
@@ -329,26 +320,15 @@ void Platform_StoreSaveFile(void)
     StoreSaveFile();
 }
 
+// From the copy in memory, which every write goes to before the file
 void Platform_ReadFlash(u16 sectorNum, u32 offset, u8 *dest, u32 size)
 {
+    u32 start = (sectorNum << gFlash->sector.shift) + offset;
+
     DBGPRINTF("ReadFlash(sectorNum=0x%04X,offset=0x%08X,size=0x%02X)\n",sectorNum,offset,size);
-    FILE * savefile = fopen(sSavePath, "r+b");
-    if (savefile == NULL)
-    {
-        puts("Error opening save file.");
+    if (start >= sizeof(FLASH_BASE) || size > sizeof(FLASH_BASE) - start)
         return;
-    }
-    if (fseek(savefile, (sectorNum << gFlash->sector.shift) + offset, SEEK_SET))
-    {
-        fclose(savefile);
-        return;
-    }
-    if (fread(dest, 1, size, savefile) != size)
-    {
-        fclose(savefile);
-        return;
-    }
-    fclose(savefile);
+    memcpy(dest, FLASH_BASE + start, size);
 }
 
 static u64 HashBytes(u64 hash, const void *data, size_t size)
@@ -406,15 +386,6 @@ void Platform_QueueAudio(float *audioBuffer, s32 samplesPerFrame)
                 SDL_QueueAudio(1, sSilence, samplesPerFrame);
         }
         SDL_QueueAudio(1, audioBuffer, samplesPerFrame);
-    }
-}
-
-
-static void CloseSaveFile()
-{
-    if (sSaveFile != NULL)
-    {
-        fclose(sSaveFile);
     }
 }
 
@@ -897,7 +868,6 @@ static int RunTestMode(void)
         fclose(sTestAudio);
     }
     fclose(sTestInput);
-    CloseSaveFile();
     return 0;
 }
 #endif // PORTABLE
